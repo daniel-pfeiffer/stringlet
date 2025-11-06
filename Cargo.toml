@@ -1,0 +1,11 @@
+[package]
+name = "stringlet"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-2.0-or-later OR Apache-2.0"
+authors = ["Daniel Pfeiffer <occitan@esperanto.org>"]
+
+[features]
+len64 = []
+
+[dependencies]
