@@ -1,60 +1,51 @@
 //! `Display` and `Debug` for Stringlet
 
-use super::Stringlet;
-use crate::repr::*;
+use crate::{methods::TAIL_TAG, *};
 
 use core::fmt::{Debug, Display, Error, Formatter};
 
-impl<const CAPACITY: usize, const FIXED: bool> Display for Stringlet<CAPACITY, FIXED>
+impl<const SIZE: usize, const FIXED: bool, const ALIGN: u8> Display
+    for Stringlet<SIZE, FIXED, ALIGN>
 where
-    Size<CAPACITY>: Config<CAPACITY>,
+    Self: Config<SIZE, ALIGN>,
 {
     fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), Error> {
         write!(fmt, "{}", self.as_str())
     }
 }
 
-impl<const CAPACITY: usize, const FIXED: bool> Debug for Stringlet<CAPACITY, FIXED>
+impl<const SIZE: usize, const FIXED: bool, const ALIGN: u8> Debug for Stringlet<SIZE, FIXED, ALIGN>
 where
-    Size<CAPACITY>: Config<CAPACITY>,
+    Self: Config<SIZE, ALIGN>,
 {
     fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(fmt, "{} {{ ", std::any::type_name::<Self>(),)?;
         if fmt.alternate() {
-            // SAFETY: str is guaranteed to be initialized and valid UTF-8 up to len()
-            unsafe {
-                write!(
-                    fmt,
-                    "SIZE: {}, repr: {:?}, raw: {:?}, ",
-                    Self::SIZE,
-                    self.repr,
-                    self.raw
-                )?;
-                if option_env!("STRINGLET_RAW_DEBUG").is_none() {
-                    let len = self.len();
-                    write!(fmt, "len(): {len}, ")?;
-                    if len < CAPACITY {
-                        write!(fmt, "str: [{:?}", self.as_str())?;
-                        for i in len..CAPACITY {
-                            write!(fmt, ", 0b11_{:06b}", self.str[i] ^ super::TAIL_TAG)?;
-                        }
-                        write!(fmt, "]")?;
-                    } else {
-                        write!(fmt, "str: {:?}", self.as_str())?;
+            write!(fmt, "{} {{ ", std::any::type_name::<Self>(),)?;
+            let len = self.len();
+            write!(fmt, "SIZE: {}, len(): {len}, [u8]: {:?}, ", SIZE, o!(self))?;
+            if option_env!("STRINGLET_RAW_DEBUG").is_none() {
+                if len < SIZE {
+                    write!(fmt, "str: [{:?}", self.as_str())?;
+                    for i in len..SIZE {
+                        write!(fmt, ", 0b11_{:06b}", o!(self)[i] ^ TAIL_TAG)?;
                     }
-                } else if CAPACITY > 0 {
-                    let last = self.last();
+                    write!(fmt, "]")?;
+                } else {
+                    write!(fmt, "str: {:?}", self.as_str())?;
+                }
+            } else if SIZE > 0 {
+                let last = self.last();
+                if last >= TAIL_TAG {
                     write!(
                         fmt,
-                        "is_last: {}, last_payload: {}({1:08b}:{:08b})",
-                        last >= super::TAIL_TAG,
+                        "last_tagged: ({}, {0:08b}; {}, {1:06b})",
                         last,
-                        last ^ super::TAIL_TAG
+                        last ^ TAIL_TAG
                     )?;
                 }
             }
         } else {
-            write!(fmt, "str: {:?}", self.as_str())?;
+            write!(fmt, "{} {{ str: {:?}", Self::type_name(), self.as_str())?;
         }
         write!(fmt, " }}")
     }
