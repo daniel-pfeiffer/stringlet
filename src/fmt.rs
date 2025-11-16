@@ -1,33 +1,38 @@
 //! `Display` and `Debug` for Stringlet
 
-use crate::{methods::TAIL_TAG, *};
+use crate::{methods::TAG, *};
 
 use core::fmt::{Debug, Display, Error, Formatter};
 
-impl<const SIZE: usize, const FIXED: bool, const ALIGN: u8> Display
-    for Stringlet<SIZE, FIXED, ALIGN>
+impl<const SIZE: usize, const FIXED: bool, const LEN: usize, const ALIGN: u8> Display
+    for StringletBase<SIZE, FIXED, LEN, ALIGN>
 where
-    Self: Config<SIZE, ALIGN>,
+    Self: Config<SIZE, FIXED, LEN, ALIGN>,
 {
     fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), Error> {
         write!(fmt, "{}", self.as_str())
     }
 }
 
-impl<const SIZE: usize, const FIXED: bool, const ALIGN: u8> Debug for Stringlet<SIZE, FIXED, ALIGN>
+impl<const SIZE: usize, const FIXED: bool, const LEN: usize, const ALIGN: u8> Debug
+    for StringletBase<SIZE, FIXED, LEN, ALIGN>
 where
-    Self: Config<SIZE, ALIGN>,
+    Self: Config<SIZE, FIXED, LEN, ALIGN>,
 {
     fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), Error> {
         if fmt.alternate() {
-            write!(fmt, "{} {{ ", std::any::type_name::<Self>(),)?;
+            write!(
+                fmt,
+                "{} {{ /* TODO adapt {{:#?}} to 3 variants */ ",
+                std::any::type_name::<Self>(),
+            )?;
             let len = self.len();
-            write!(fmt, "SIZE: {}, len(): {len}, [u8]: {:?}, ", SIZE, o!(self))?;
+            write!(fmt, "SIZE: {}, len(): {len}, [u8]: {:?}, ", SIZE, self.str)?;
             if option_env!("STRINGLET_RAW_DEBUG").is_none() {
                 if len < SIZE {
                     write!(fmt, "str: [{:?}", self.as_str())?;
                     for i in len..SIZE {
-                        write!(fmt, ", 0b11_{:06b}", o!(self)[i] ^ TAIL_TAG)?;
+                        write!(fmt, ", 0b11_{:06b}", self.str[i] ^ TAG)?;
                     }
                     write!(fmt, "]")?;
                 } else {
@@ -35,17 +40,22 @@ where
                 }
             } else if SIZE > 0 {
                 let last = self.last();
-                if last >= TAIL_TAG {
+                if last >= TAG {
                     write!(
                         fmt,
                         "last_tagged: ({}, {0:08b}; {}, {1:06b})",
                         last,
-                        last ^ TAIL_TAG
+                        last ^ TAG
                     )?;
                 }
             }
         } else {
-            write!(fmt, "{} {{ str: {:?}", Self::type_name(), self.as_str())?;
+            write!(
+                fmt,
+                "{} {{ str: {:?}",
+                Self::type_name().join(""),
+                self.as_str()
+            )?;
         }
         write!(fmt, " }}")
     }

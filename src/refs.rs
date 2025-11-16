@@ -4,9 +4,10 @@ use crate::*;
 
 use core::ops::Deref;
 
-impl<const SIZE: usize, const FIXED: bool, const ALIGN: u8> Deref for Stringlet<SIZE, FIXED, ALIGN>
+impl<const SIZE: usize, const FIXED: bool, const LEN: usize, const ALIGN: u8> Deref
+    for StringletBase<SIZE, FIXED, LEN, ALIGN>
 where
-    Self: Config<SIZE, ALIGN>,
+    Self: Config<SIZE, FIXED, LEN, ALIGN>,
 {
     type Target = str;
 
@@ -16,10 +17,10 @@ where
     }
 }
 
-impl<const SIZE: usize, const FIXED: bool, const ALIGN: u8> AsRef<str>
-    for Stringlet<SIZE, FIXED, ALIGN>
+impl<const SIZE: usize, const FIXED: bool, const LEN: usize, const ALIGN: u8> AsRef<str>
+    for StringletBase<SIZE, FIXED, LEN, ALIGN>
 where
-    Self: Config<SIZE, ALIGN>,
+    Self: Config<SIZE, FIXED, LEN, ALIGN>,
 {
     #[inline(always)]
     fn as_ref(&self) -> &str {
@@ -27,63 +28,63 @@ where
     }
 }
 
-impl<const SIZE: usize> AsRef<FixedStringlet<SIZE>> for str
+impl<const SIZE: usize> AsRef<Stringlet<SIZE>> for str
 where
-    FixedStringlet<SIZE>: Config<SIZE, 1>,
+    Stringlet<SIZE>: Config<SIZE>,
 {
-    /// Cast a `str` as a shared reference to a `FixedStringlet`.
+    /// Cast a `str` as a shared reference to a fixed size `Stringlet`.
     /// The size may be inferred, but it must match the input length!
     /// Alignment will be that of the input, so you can’t choose more than 1.
     #[inline(always)]
-    fn as_ref(&self) -> &FixedStringlet<SIZE> {
+    fn as_ref(&self) -> &Stringlet<SIZE> {
         assert_eq!(
             self.len(),
             SIZE,
-            "Cannot cast len {} str as &FixedStringlet<{SIZE}>",
+            "Cannot cast len {} str as &Stringlet<{SIZE}>",
             self.len()
         );
         // SAFETY I’m not sure. It seems to cast the input bytes to Stringlet just fine.
-        unsafe { core::mem::transmute(&*(self.as_ptr() as *const FixedStringlet<SIZE>)) }
+        unsafe { core::mem::transmute(&*(self.as_ptr() as *const Stringlet<SIZE>)) }
     }
 }
 
-impl<const SIZE: usize> AsRef<FixedStringlet<SIZE>> for String
+impl<const SIZE: usize> AsRef<Stringlet<SIZE>> for String
 where
-    FixedStringlet<SIZE>: Config<SIZE, 1>,
+    Stringlet<SIZE>: Config<SIZE>,
 {
-    /// Cast a `String` as a shared reference to a `FixedStringlet`.
+    /// Cast a `String` as a shared reference to a fixed size `Stringlet`.
     /// The size may be inferred, but it must match the input length!
     /// Alignment will be that of the input, so you can’t choose more than 1.
     #[inline(always)]
-    fn as_ref(&self) -> &FixedStringlet<SIZE> {
+    fn as_ref(&self) -> &Stringlet<SIZE> {
         assert_eq!(
             self.len(),
             SIZE,
-            "Cannot cast len {} String as &FixedStringlet<{SIZE}>",
+            "Cannot cast len {} String as &Stringlet<{SIZE}>",
             self.len()
         );
         // SAFETY I’m not sure. It seems to cast the input bytes to Stringlet just fine.
-        unsafe { core::mem::transmute(&*(self.as_ptr() as *const FixedStringlet<SIZE>)) }
+        unsafe { core::mem::transmute(&*(self.as_ptr() as *const Stringlet<SIZE>)) }
     }
 }
 
-impl<const SIZE: usize> AsRef<FixedStringlet<SIZE>> for Box<str>
+impl<const SIZE: usize> AsRef<Stringlet<SIZE>> for Box<str>
 where
-    FixedStringlet<SIZE>: Config<SIZE, 1>,
+    Stringlet<SIZE>: Config<SIZE>,
 {
-    /// Cast a `Box<str>` as a shared reference to a `FixedStringlet`.
+    /// Cast a `Box<str>` as a shared reference to a fixed size `Stringlet`.
     /// The size may be inferred, but it must match the input length!
     /// Alignment will be that of the input, so you can’t choose more than 1.
     #[inline(always)]
-    fn as_ref(&self) -> &FixedStringlet<SIZE> {
+    fn as_ref(&self) -> &Stringlet<SIZE> {
         assert_eq!(
             self.len(),
             SIZE,
-            "Cannot cast len {} Box<str> as &FixedStringlet<{SIZE}>",
+            "Cannot cast len {} Box<str> as &Stringlet<{SIZE}>",
             self.len()
         );
         // SAFETY I’m not sure. It seems to cast the input bytes to Stringlet just fine.
-        unsafe { core::mem::transmute(&*(self.as_ptr() as *const FixedStringlet<SIZE>)) }
+        unsafe { core::mem::transmute(&*(self.as_ptr() as *const Stringlet<SIZE>)) }
     }
 }
 
@@ -93,7 +94,11 @@ mod tests {
 
     #[test]
     fn test_deref() {
-        let s = Stringlet::<4>::from("Abc");
+        let s = Stringlet::<3>::from("Abc");
+        assert!(s.contains('b'));
+        let s = VarStringlet::<4>::from("Abc");
+        assert!(s.contains('b'));
+        let s = SlimStringlet::<4>::from("Abc");
         assert!(s.contains('b'));
     }
 
@@ -109,7 +114,7 @@ mod tests {
         macro_rules! test_borrow {
             ($a:ident = $in:expr, $size:literal) => {
                 let $a = $in;
-                let fs: &FixedStringlet<$size> = $a.as_ref();
+                let fs: &Stringlet<$size> = $a.as_ref();
                 assert_ne!(
                     format!("{:p}", $a),
                     format!("{:p}", fs),

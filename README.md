@@ -1,8 +1,8 @@
 # 🧵 Stringlet
 
 A fast, cheap, compile-time constructible, `Copy`-able, kinda primitive inline string type. Stringlet length is limited
-to 64. *Though the longer your stringlets, the less you should be moving and copying them!*  No dependencies are
-planned, except for optional SerDe support, etc. The intention is to be no-std and no-alloc. This might yet require
+to 64 bytes. *Though the longer your stringlets, the less you should be moving and copying them!* No dependencies are
+planned, except for optional SerDe support, etc. The intention is to be no-std and no-alloc – which might yet require
 feature-gating `String` interop?
 
 <div class="warning">
@@ -10,32 +10,45 @@ This is an <b>alpha release</b>. Using it as <code>str</code> should mostly work
 <code>String</code> functionality, but that needs to be implemented.
 </div>
 
-In my casual benchmarking it beats all other string kinds and crates nicely on some tests. The fixed sized variant is
-otherwise on par with the competition. However for the variable sized variant, `as_str()` is noticeably slower than
-others. The necessary length calculation is branchless, but I’m still racking my brain how to do it with less ops. Any
-bit hackers, welcome on board!
+In my casual benchmarking it beats all other string kinds and crates nicely to spectacularly on various tests. There are
+three flavors of mostly the same code. They differ in length handling, which shows only in some operations, like
+`len()`, `as_ref()`, and `as_str()`:
 
+- **`Stringlet`, `stringlet!(…)`**: This is fixed size, i.e. bounds for array access are compiled in, hence fast.
+
+- **`VarStringlet`, `stringlet!(var …)`, `stringlet!(v …)`**: This adds one byte for the length, still pretty fast.
+
+- **`SlimStringlet`, `stringlet!(slim …)`, `stringlet!(s …)`**: This projects the length into the last byte, when content
+  is less than full size. Though it is done branchlessly, there is some overhead for length calculation. Hence this is the
+  slowest. I’m still racking my brain for how to do it with less ops. Any bit hackers, welcome on board!
+
+N.B.: Our variable size `VarStringlet` seems a competitor to [`fixedstr`](https://crates.io/crates/fixedstr) and the
+semi-official [`heapless::String`](https://docs.rs/heapless/latest/heapless/string/type.String.html). They lack a faster
+`heapless::Str`, to match fixed size `Stringlet`. That is given by
+[`arrayvec::ArrayString`](https://crates.io/crates/arrayvec). I hope it can be independently confirmed (or debunked, if
+I mismeasured) that for various tasks like `== Self` or `== &str` all three variants in this crate seem by a factor
+faster than competitors.
 
 ```rust
 # extern crate stringlet;
-use stringlet::{FixedStringlet, Stringlet, stringlet};
+use stringlet::{Stringlet, VarStringlet, SlimStringlet, stringlet};
 
-let a: Stringlet<10> = "shorter".into(); // override default Stringlet size of 16 and don’t use all of it
+let a: VarStringlet<10> = "shorter".into(); // override default Stringlet size of 16 and don’t use all of it
 let b = a;
 println!("{a} == {b}? {}", a == b);      // No “value borrowed here after move” error 😇
 
 let nothing = Stringlet::<0>::new();     // Empty and zero size
-let nil = Stringlet::<5>::from_str("");  // Empty and size 5
+let nil = VarStringlet::<5>::new();      // Empty and size 5 – impossible for fixed size Stringlet
 
 let x = stringlet!("Hello Rust!");       // Stringlet<11>
-let y = stringlet!(14: "Hello Rust!");   // Stringlet<14>, more than length
-let z = stringlet!(="Hello Rust!");      // FixedStringlet<11>, colon optional here
-let Ψ = stringlet!(["abcd", "abc", "ab"]); // Stringlet<4> for each, colon optional here
-let ω = stringlet!(=["abc", "def", "ghj"]); // FixedStringlet<3> for each, colon optional here
+let y = stringlet!(v 14: "Hello Rust!"); // abbreviated VarStringlet<14>, more than length
+let z = stringlet!(slim: "Hello Rust!"); // SlimStringlet<11>
+let Ψ = stringlet!(v: ["abcd", "abc", "ab"]); // VarStringlet<4> for each
+let ω = stringlet!(["abc", "def", "ghj"]); // Stringlet<3> for each
 
-const HELLO: Stringlet = stringlet!(_: "Hello Rust!"); // derived default size of Stringlet<16>
-const PETS: [Stringlet<8>; 4] = stringlet!(_: ["cat", "dog", "hamster", "piglet"]); // derive size for all
-const PE: [FixedStringlet<2>; 4] = stringlet!(_: ["ca", "do", "ha", "pi"]); // derive size and fixed for all
+const HELLO: Stringlet<11> = stringlet!("Hello Rust!"); // Input length must match type
+const PET: [Stringlet<3>; 4] = stringlet!(["cat", "dog", "ham", "pig"]); // size of 1st element
+const PETS: [VarStringlet<8>; 4] = stringlet!(_: ["cat", "dog", "hamster", "piglet"]); // _: derive type
 ```
 
 But
@@ -47,9 +60,8 @@ error[E0277]: `Stringlet<99>` has excessive SIZE
 99 | let balloons = stringlet!(99: "Luftballons, auf ihrem…");
    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ SIZE must be `0..=64`
    |
-   = help: the trait `Config<99>` is not implemented for `Stringlet<99>`
+   = help: the trait `Config<99>` is not implemented for `stringlet::StringletBase<99>`
    = note: `Stringlet` cannot be longer than 64 bytes. Consider using `String`!
-   = note: Also ALIGN is 1. This must be one of 1, 2, 4, 8, 16, 32, or 64!
 ```
 
 This is **not** your classical short string optimization (SSO) in so far as there is no overflow into an alternate
@@ -57,14 +69,16 @@ bigger storage. This is by design, as addressing two different data routes requi
 misprediction can be costly. Stringlet tries hard to be maximally branchless. The few `if`s and `||`s refer to
 constants, so should be optimized away.
 
-The length is tucked in through a no-extra-space branchless UTF-8 hack, when shorter than size. There is no `Option` or
-`Result` niche optimization yet. But, that should likewise be feasible for all stringlets shorter than physical size. I
-only need to understand how to tell the compiler?
+There is no `Option` or `Result` niche optimization yet. That should likewise be feasible for all stringlets with a
+stored length. I only need to understand how to tell the compiler?
 
-`Stringlet` is configured so can only be instantiated with valid size. For normal use that’s all there is to it. However
-when forwarding generic arguments to `Stringlet` you too have to specify `Config`. I wish I could just hide it all
-behind `<const SIZE: usize<0..=64>>`! Since we have this anyway, it can also apply alignments up to 64 to each instance
-where you may need this. This is aliased to names like `Stringlet4` or `FixedStringlet8`.
+`Stringlet` is configured so it can only be instantiated with valid size. For normal use that’s all there is to it.
+However when forwarding generic arguments to `Stringlet` you too have to specify `Config`. I wish I could just hide it
+all behind `<const SIZE: usize<0..=64>>`!
+
+Since we have configuration anyway, it can also apply alignments up to 64 to each instance where you may need this. This
+is aliased to names like `Stringlet4` or `SlimStringlet8`. Do benchmark, e.g. on a modern x86 it no longer seems to
+affect performance.
 
 ## Todo
 
@@ -84,14 +98,16 @@ where you may need this. This is aliased to names like `Stringlet4` or `FixedStr
 
 - [ ] Implement more traits.
 
-- [ ] Add a macro syntax for align.
+- [x] Add a macro syntax for align.
 
-- [ ] `format!()` equivalent `format_stringlet!()`
+- [ ] `format!()` equivalent `stringlet!(format …)` or `format_stringlet!()`
 
-- [ ] Integrate into [string-rosetta-rs](rosetta-rs/string-rosetta-rs)
+- [ ] Integrate into [string-rosetta-rs](https://github.com/rosetta-rs/string-rosetta-rs)
 
 - [ ] Implement for popular 3rd party crates.
 
 - [ ] Why does this not pick up the default SIZE of 16: `let fail = Stringlet::new();`
 
 - [ ] What’s our minimal rust-version?
+
+- [ ] Is there a downside to `Copy` by default?
