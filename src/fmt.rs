@@ -4,21 +4,17 @@ use crate::{methods::TAG, *};
 
 use core::fmt::{Debug, Display, Error, Formatter};
 
-impl<const SIZE: usize, const FIXED: bool, const LEN: usize, const ALIGN: u8> Display
-    for StringletBase<SIZE, FIXED, LEN, ALIGN>
-where
-    Self: Config<SIZE, FIXED, LEN, ALIGN>,
-{
+impl_for! {
+    Display:
+
     fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), Error> {
         write!(fmt, "{}", self.as_str())
     }
 }
 
-impl<const SIZE: usize, const FIXED: bool, const LEN: usize, const ALIGN: u8> Debug
-    for StringletBase<SIZE, FIXED, LEN, ALIGN>
-where
-    Self: Config<SIZE, FIXED, LEN, ALIGN>,
-{
+impl_for! {
+    Debug:
+
     fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), Error> {
         if fmt.alternate() {
             write!(

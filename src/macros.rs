@@ -112,10 +112,18 @@ mod doctests {
     /**
     ```compile_fail
     # use crate::stringlet::stringlet;
-        stringlet!("0123456789_123456789_123456789_123456789_123456789_123456789_1234"); // 65 is too long
+        stringlet!(var: "0123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_12345");
     ```
     */
-    fn test_macro_65_compile_fail() {}
+    fn test_macro_var_256_compile_fail() {} // VarStringlet<256> is too long
+
+    /**
+    ```compile_fail
+    # use crate::stringlet::stringlet;
+        stringlet!(slim: "0123456789_123456789_123456789_123456789_123456789_123456789_1234"); // 65 is too long
+    ```
+    */
+    fn test_macro_slim_65_compile_fail() {} // SlimStringlet<65> is too long
 }
 
 #[cfg(test)]

@@ -86,31 +86,22 @@ where
         let mut str_uninit = core::mem::MaybeUninit::uninit();
         let str = str_uninit.as_mut_ptr() as *mut u8;
 
-        unsafe {
-            Self {
-                _align: [],
-                // SAFETY we only write to uninit via pointer methods before Rust sees the value
-                str: {
-                    core::ptr::copy_nonoverlapping(bytes.as_ptr(), str, bytes_len);
-                    if !FIXED {
-                        let tail = if LEN == 1 {
-                            TAG
-                        } else {
-                            TAG | (SIZE - bytes_len) as u8
-                        };
-                        str.add(bytes_len).write_bytes(tail, SIZE - bytes_len);
-                    }
-                    str_uninit.assume_init()
-                },
-                len: if LEN == 1 {
-                    let mut len_uninit = core::mem::MaybeUninit::uninit();
-                    let len = len_uninit.as_mut_ptr() as *mut u8;
-                    len.write_bytes(bytes_len as _, LEN);
-                    len_uninit.assume_init()
-                } else {
-                    [0; LEN]
-                },
-            }
+        Self {
+            _align: [],
+            // SAFETY we only write to uninit via pointer methods before Rust sees the value
+            str: unsafe {
+                core::ptr::copy_nonoverlapping(bytes.as_ptr(), str, bytes_len);
+                if !FIXED {
+                    let tail = if LEN == 1 {
+                        TAG
+                    } else {
+                        TAG | (SIZE - bytes_len) as u8
+                    };
+                    str.add(bytes_len).write_bytes(tail, SIZE - bytes_len);
+                }
+                str_uninit.assume_init()
+            },
+            len: [bytes_len as _; _],
         }
     }
 
@@ -215,17 +206,10 @@ where
 mod doctests {
     /**
     ```compile_fail
-    let _x: stringlet::Stringlet<65>;
+    let _x: stringlet::VarStringlet<256>;
     ```
     */
-    fn test_stringlet_65_compile_fail() {}
-
-    /**
-    ```compile_fail
-    let _x: stringlet::VarStringlet<65>;
-    ```
-    */
-    fn test_var_stringlet_65_compile_fail() {}
+    fn test_var_stringlet_256_compile_fail() {}
 
     /**
     ```compile_fail
@@ -250,13 +234,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_big() {
+        let _f: Stringlet<1024>;
+        let _v: VarStringlet<255>;
+        let _s: SlimStringlet<64>;
+    }
+
+    #[test]
     fn test_as_str() {
-        let x: Stringlet<7> = "A123456".into();
-        assert_eq!(x.as_str(), "A123456");
-        let y: VarStringlet = "A123456".into();
-        assert_eq!(y.as_str(), "A123456");
-        let z: SlimStringlet = "A123456".into();
-        assert_eq!(z.as_str(), "A123456");
+        let f: Stringlet<7> = "A123456".into();
+        assert_eq!(f.as_str(), "A123456");
+        let v: VarStringlet = "A123456".into();
+        assert_eq!(v.as_str(), "A123456");
+        let s: SlimStringlet = "A123456".into();
+        assert_eq!(s.as_str(), "A123456");
     }
 
     #[test]

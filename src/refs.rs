@@ -4,11 +4,9 @@ use crate::*;
 
 use core::ops::Deref;
 
-impl<const SIZE: usize, const FIXED: bool, const LEN: usize, const ALIGN: u8> Deref
-    for StringletBase<SIZE, FIXED, LEN, ALIGN>
-where
-    Self: Config<SIZE, FIXED, LEN, ALIGN>,
-{
+impl_for! {
+    Deref:
+
     type Target = str;
 
     #[inline(always)]
@@ -17,11 +15,9 @@ where
     }
 }
 
-impl<const SIZE: usize, const FIXED: bool, const LEN: usize, const ALIGN: u8> AsRef<str>
-    for StringletBase<SIZE, FIXED, LEN, ALIGN>
-where
-    Self: Config<SIZE, FIXED, LEN, ALIGN>,
-{
+impl_for! {
+    AsRef<str>:
+
     #[inline(always)]
     fn as_ref(&self) -> &str {
         self.as_str()

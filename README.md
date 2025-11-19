@@ -1,9 +1,8 @@
 # 🧵 Stringlet
 
-A fast, cheap, compile-time constructible, `Copy`-able, kinda primitive inline string type. Stringlet length is limited
-to 64 bytes. *Though the longer your stringlets, the less you should be moving and copying them!* No dependencies are
-planned, except for optional SerDe support, etc. The intention is to be no-std and no-alloc – which might yet require
-feature-gating `String` interop?
+A fast, cheap, compile-time constructible, `Copy`-able, kinda primitive inline string type. When storing these on the
+stack, you probably want to use smaller sizes, hence the name. No dependencies are planned, except for optional SerDe
+support, etc. The intention is to be no-std and no-alloc – which might yet require feature-gating `String` interop?
 
 <div class="warning">
 This is an <b>alpha release</b>. Using it as <code>str</code> should mostly work. The design is prepared for
@@ -17,10 +16,12 @@ three flavors of mostly the same code. They differ in length handling, which sho
 - **`Stringlet`, `stringlet!(…)`**: This is fixed size, i.e. bounds for array access are compiled in, hence fast.
 
 - **`VarStringlet`, `stringlet!(var …)`, `stringlet!(v …)`**: This adds one byte for the length, still pretty fast.
+  Length must be `0..=255`.
 
-- **`SlimStringlet`, `stringlet!(slim …)`, `stringlet!(s …)`**: This projects the length into the last byte, when content
-  is less than full size. Though it is done branchlessly, there is some overhead for length calculation. Hence this is the
-  slowest. I’m still racking my brain for how to do it with less ops. Any bit hackers, welcome on board!
+- **`SlimStringlet`, `stringlet!(slim …)`, `stringlet!(s …)`**: This projects the length into 6 bits of the last byte,
+  when content is less than full size. Length must be `0..=64`. Though it is done branchlessly, there is some overhead
+  for length calculation. Hence this is the slowest. I’m still racking my brain for how to do it with less ops. Any bit
+  hackers, welcome on board!
 
 N.B.: Our variable size `VarStringlet` seems a competitor to [`fixedstr`](https://crates.io/crates/fixedstr) and the
 semi-official [`heapless::String`](https://docs.rs/heapless/latest/heapless/string/type.String.html). They lack a faster
@@ -54,14 +55,15 @@ const PETS: [VarStringlet<8>; 4] = stringlet!(_: ["cat", "dog", "hamster", "pigl
 But
 
 ```text
-error[E0277]: `Stringlet<99>` has excessive SIZE
+error[E0277]: `VarStringlet<99>` or `SlimStringlet<99>` has excessive SIZE
   --> src/main.rs:99:16
    |
-99 | let balloons = stringlet!(99: "Luftballons, auf ihrem…");
-   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ SIZE must be `0..=64`
+99 | let balloons = stringlet!(slim 99: "Luftballons, auf ihrem…");
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ SIZE must be `0..=255` or `0..=64`
    |
-   = help: the trait `Config<99>` is not implemented for `stringlet::StringletBase<99>`
-   = note: `Stringlet` cannot be longer than 64 bytes. Consider using `String`!
+   = help: the trait `Config<99, false>` is not implemented for `StringletBase<99, false>`
+   = note: `VarStringlet` cannot be longer than 255 bytes. Consider using `String`!
+   = note: `SlimStringlet` cannot be longer than 64 bytes. Consider using `VarStringlet`!
 ```
 
 This is **not** your classical short string optimization (SSO) in so far as there is no overflow into an alternate
