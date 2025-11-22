@@ -8,31 +8,43 @@ use core::cmp::Ordering;
 impl_for! { Eq }
 
 impl_for! {
-    <2> PartialEq<StringletBase<SIZE2, FIXED2, LEN2, ALIGN2>>:
+    <2> PartialEq<self2!()>:
 
     #[inline]
-    fn eq(&self, other: &StringletBase<SIZE2, FIXED2, LEN2, ALIGN2>) -> bool {
-        match (SIZE == SIZE2, FIXED, FIXED2) {
+    fn eq(&self, other: &self2!()) -> bool {
+        // Successively eliminate cases that can be excluded at compile time, based on sizes and kinds.
+        // All kinds get filled up with the same tagged value, so often no need to calculate len.
+        // This favors comparing full arrays, hopefully by SIMD, rather than calculating the slices.
+        match (SIZE == SIZE2, Self::FIXED, other.is_fixed(), Self::TRIM, other.is_trim()) {
             // Slice only needed because the compiler can’t reason about these types being same.
             // Would need specialization, with either both being SIZE or SIZE != SIZE2.
             (true, ..) => SIZE == 0 || self.str == other.str[..],
 
-            // Fixeds can only be same at same length.
-            (_, true, true) => false,
+            // Else fixeds can not be same.
+            (_, true, true, ..) => false,
 
-            // Either fixed one can only be eq if shorter; and it doesn’t need a dynamic slice
-            (_, true, _) => SIZE < SIZE2 && self.str == other.str[..other.len()],
-            (.., true) => SIZE > SIZE2 && self.str[..self.len()] == other.str,
+            // Else either fixed can only be eq to trim if shorter by 1; and it doesn’t need a dynamic slice
+            (_, true, _, _, true) => SIZE < SIZE2 && SIZE + 1 == SIZE2 && self.str == other.str[..other.len()],
+            (_, _, true, true, _) => SIZE > SIZE2 && SIZE == SIZE2 + 1 && self.str[..self.len()] == other.str,
+
+            // Else either fixed can only be eq if shorter; and it doesn’t need a dynamic slice
+            (_, true, ..) => SIZE < SIZE2 && self.str == other.str[..other.len()],
+            (_, _, true, ..) => SIZE > SIZE2 && self.str[..self.len()] == other.str,
+
+            // Else either trim can only be eq if shorter or longer by 1
+            (.., true, _) => (SIZE < SIZE2 || SIZE == SIZE2 + 1) && self.str[..self.len()] == other.str[..other.len()],
+            (.., true) => (SIZE > SIZE2 || SIZE + 1 == SIZE2) && self.str[..self.len()] == other.str[..other.len()],
+
             _ => self.str[..self.len()] == other.str[..other.len()],
         }
     }
 }
 
 impl_for! {
-    <'a, 2> PartialEq<&'a StringletBase<SIZE2, FIXED2, LEN2, ALIGN2>>:
+    <'a, 2> PartialEq<&'a self2!()>:
 
     #[inline(always)]
-    fn eq(&self, other: &&'a StringletBase<SIZE2, FIXED2, LEN2, ALIGN2>) -> bool {
+    fn eq(&self, other: &&'a self2!()) -> bool {
         self.eq(*other)
     }
 }
@@ -44,7 +56,7 @@ impl_for! {
     fn eq(&self, other: &str) -> bool {
         if SIZE == 0 {
             other.is_empty()
-        } else if FIXED {
+        } else if Self::FIXED {
             self.str == *other.as_bytes()
         } else {
             self.str[..self.len()] == *other.as_bytes()
@@ -61,12 +73,21 @@ impl_for! {
     }
 }
 
+impl_for! {
+    PartialEq<String>:
+
+    #[inline]
+    fn eq(&self, other: &String) -> bool {
+        self.eq(other.as_str())
+    }
+}
+
 // Gnats: Ord falls short of PartialEq, in that I can only compare to Self
 /* impl_for! {
     Ord:
 
     fn cmp(&self, other: &Self) -> Ordering {
-        if FIXED {
+        if Self::FIXED {
             self.str.cmp(&other.str)
         } else {
             self.str[..self.len()].cmp(&other.str[..other.len()])
@@ -84,13 +105,16 @@ impl_for! {
 } */
 
 impl_for! {
-    <2> PartialOrd<StringletBase<SIZE2, FIXED2, LEN2, ALIGN2>>:
+    <2> PartialOrd<self2!()>:
 
-    fn partial_cmp(&self, other: &StringletBase<SIZE2, FIXED2, LEN2, ALIGN2>) -> Option<Ordering> {
-        Some(if FIXED && FIXED2 {
+    // This is less optimised than eq, as the filler after len is greater than valid characters.
+    fn partial_cmp(&self, other: &self2!()) -> Option<Ordering> {
+        Some(if Self::FIXED && other.is_fixed() {
             self.str[..].cmp(&other.str[..])
-        } else if FIXED {
+        } else if Self::FIXED {
             self.str[..].cmp(&other.str[..other.len()])
+        } else if other.is_fixed() {
+            self.str[..self.len()].cmp(&other.str[..])
         } else {
             self.str[..self.len()].cmp(&other.str[..other.len()])
         })
@@ -98,9 +122,31 @@ impl_for! {
 }
 
 impl_for! {
-    <'a, 2> PartialOrd<&'a StringletBase<SIZE2, FIXED2, LEN2, ALIGN2>>:
+    <'a, 2> PartialOrd<&'a self2!()>:
 
-    fn partial_cmp(&self, other: &&'a StringletBase<SIZE2, FIXED2, LEN2, ALIGN2>) -> Option<Ordering> {
+    fn partial_cmp(&self, other: &&'a self2!()) -> Option<Ordering> {
+        self.partial_cmp(*other)
+    }
+}
+
+impl_for! {
+    PartialOrd<str>:
+
+    #[inline]
+    fn partial_cmp(&self, other: &str) -> Option<Ordering> {
+        if Self::FIXED {
+            self.str[..].partial_cmp(other.as_bytes())
+        } else {
+            self.str[..self.len()].partial_cmp(other.as_bytes())
+        }
+    }
+}
+
+impl_for! {
+    <'a> PartialOrd<&'a str>:
+
+    #[inline(always)]
+    fn partial_cmp(&self, other: &&'a str) -> Option<Ordering> {
         self.partial_cmp(*other)
     }
 }
@@ -119,40 +165,93 @@ impl_for! {
 mod tests {
     use super::*;
 
+    // Compare each with self and every other
+    macro_rules! cmp_all {
+        ($op:tt) => {
+            cmp_all!($op:
+                stringlet!(""),
+                stringlet!(v: ""),
+                stringlet!(v 1: ""),
+                stringlet!(v 2: ""),
+                stringlet!(t: ""),
+                stringlet!(t 1: ""),
+                stringlet!(s: ""),
+                stringlet!(s 1: ""),
+                stringlet!(s 2: ""),
+                stringlet!("x"),
+                stringlet!(v: "x"),
+                stringlet!(v 2: "x"),
+                stringlet!(v 3: "x"),
+                stringlet!(t: "x"),
+                stringlet!(t 2: "x"),
+                stringlet!(s: "x"),
+                stringlet!(s 2: "x"),
+                stringlet!(s 3: "x"),
+                stringlet!("y"),
+                stringlet!(v: "y"),
+                stringlet!(v 2: "y"),
+                stringlet!(v 3: "y"),
+                stringlet!(t: "y"),
+                stringlet!(t 2: "y"),
+                stringlet!(s: "y"),
+                stringlet!(s 2: "y"),
+                stringlet!(s 3: "y"),
+                stringlet!("xy"),
+                stringlet!(v: "xy"),
+                stringlet!(v 3: "xy"),
+                stringlet!(v 4: "xy"),
+                stringlet!(t: "xy"),
+                stringlet!(t 3: "xy"),
+                stringlet!(s: "xy"),
+                stringlet!(s 3: "xy"),
+                stringlet!(s 4: "xy"),
+                /* stringlet!("xyz"),
+                stringlet!(v: "xyz"),
+                stringlet!(v 4: "xyz"),
+                stringlet!(v 5: "xyz"),
+                stringlet!(t: "xyz"),
+                stringlet!(t 4: "xyz"),
+                stringlet!(s: "xyz"),
+                stringlet!(s 4: "xyz"),
+                stringlet!(s 5: "xyz"), */
+            );
+        };
+        ($op:tt: $a:expr, $($rest:expr,)+) => {
+            let a = $a;
+            assert_eq!(a $op a.clone(), a.as_str() $op a.as_str(), "{a:#?}");
+            //assert_eq!(a.as_str() $op a, a.as_str() $op a.as_str(), "{a:#?}");
+            assert_eq!(a $op a.as_str(), a.as_str() $op a.as_str(), "{a:#?}");
+            let ac = const { $a };
+            assert_eq!(a $op ac, a.as_str() $op ac.as_str(), "{a:#?} {ac:#?}");
+            $(
+                let b = $rest;
+                assert_eq!(a $op b, a.as_str() $op b.as_str(), "{a:#?} {b:#?}");
+                //assert_eq!(a.as_str() $op b, a.as_str() $op b.as_str(), "{a:#?} {b:#?}");
+                assert_eq!(a $op b.as_str(), a.as_str() $op b.as_str(), "{a:#?} {b:#?}");
+                assert_eq!(b $op a, b.as_str() $op a.as_str(), "{a:#?} {b:#?}");
+                //assert_eq!(b.as_str() $op a, b.as_str() $op a.as_str(), "{a:#?} {b:#?}");
+                assert_eq!(b $op a.as_str(), b.as_str() $op a.as_str(), "{a:#?} {b:#?}");
+            )+
+            cmp_all!($op: $($rest,)+);
+        };
+        ($op:tt: $a:expr,) => {};
+    }
+
     #[test]
     fn test_eq() {
-        macro_rules! assert_eq_all {
-            ($a:expr) => {};
-            ($a:expr, $b:expr $(, $($rest:tt)*)?) => {
-                assert_eq!($a, $b);
-                assert_eq_all!($b $(, $($rest)*)?)
-            };
-        }
+        // Compare all kinds with enough variation in len and SIZE
+        cmp_all!(==);
+    }
 
-        let s_x_1 = VarStringlet::<1>::from("x");
-        let s_x_2 = VarStringlet::<1>::from("x");
-        let s_y = VarStringlet::<1>::from("y");
-        let s2_x = VarStringlet::<2>::from("x");
-        let s2_y = VarStringlet::<2>::from("y");
-        let s2_xy = VarStringlet::<2>::from("xy");
+    #[test]
+    fn test_lt() {
+        // Compare all kinds with enough variation in len and SIZE
+        cmp_all!(<);
+    }
 
-        let f_x_1 = Stringlet::<1>::from("x");
-        let f_x_2 = Stringlet::<1>::from("x");
-        let f_y = Stringlet::<1>::from("y");
-        let f2_xy = Stringlet::<2>::from("xy");
-
-        assert_eq_all!(s_x_1, s_x_2, s2_x, f_x_1, f_x_2);
-        assert_eq_all!(s_y, s2_y, f_y);
-        assert_eq!(s2_xy, f2_xy);
-
-        assert_ne!(s_x_1, s_y);
-        assert_ne!(s_x_1, s2_y);
-        assert_ne!(s2_y, s_x_1);
-        assert_ne!(s_x_1, s2_xy);
-        assert_ne!(s2_xy, s_x_1);
-
-        assert_ne!(s_x_1, f_y);
-        assert_ne!(s_x_1, f2_xy);
-        assert_ne!(f2_xy, s_x_1);
+    #[test]
+    fn test_le() {
+        // Compare all kinds with enough variation in len and SIZE
+        //cmp_all!(<=);
     }
 }

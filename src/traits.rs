@@ -2,7 +2,11 @@
 
 use crate::*;
 
-use core::hash::{Hash, Hasher};
+use core::{
+    convert::Infallible,
+    hash::{Hash, Hasher},
+    str::FromStr,
+};
 
 impl_for! {
     From<String>:
@@ -19,7 +23,7 @@ impl_for! {
         assert!(
             Self::fits(str.len()),
             "{}::from(): cannot store {} characters",
-            Self::type_name().join(""),
+            Self::type_name(),
             str.len()
         );
         // SAFETY we checked the length and str is UTF-8
@@ -28,9 +32,9 @@ impl_for! {
 }
 
 impl_for! {
-    std::str::FromStr:
+    FromStr:
 
-    type Err = std::convert::Infallible;
+    type Err = Infallible;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self::from(s))

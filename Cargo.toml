@@ -1,10 +1,12 @@
 [package]
 name = "stringlet"
-version = "0.4.0"
-description = "A fast, cheap, compile-time constructible, `Copy`-able, kinda primitive inline string type. Stringlet length is limited to 64 bytes."
+version = "0.5.0"
+description = "A fast, cheap, compile-time constructible, `Copy`-able, kinda primitive inline string type with 4 variants."
 edition = "2024"
 license = "GPL-2.0-or-later OR Apache-2.0"
 authors = ["Daniel Pfeiffer <occitan@esperanto.org>"]
 repository = "https://github.com/daniel-pfeiffer/stringlet"
+keywords = ["fast", "inline", "string"]
+categories = ["memory-management", "data-structures", "no-std"]
 
 [dependencies]

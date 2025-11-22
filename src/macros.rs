@@ -10,54 +10,53 @@ macro_rules! stringlet_base {
     (param$params:tt  :  $($rest:tt)+) => {
         $crate::stringlet_base!(align$params  $($rest)+)
     };
-    (param(! $fixed:tt $len:tt $($align:tt)?)  $size:tt:  $($rest:tt)+) => {
-        $crate::stringlet_base!(align($size $fixed $len $($align)?)  $($rest)+)
+    (param($kind:tt ! $len:tt $($align:tt)?)  $size:tt:  $($rest:tt)+) => {
+        $crate::stringlet_base!(align($kind $size $len $($align)?)  $($rest)+)
     };
-    (param(! $fixed:tt $len:tt)  $size:tt $(@ $align:tt)?:  $($rest:tt)+) => {
-        $crate::stringlet_base!(align($size $fixed $len $($align)?)  $($rest)+)
+    (param($kind:tt ! $len:tt)  $size:tt $(@ $align:tt)?:  $($rest:tt)+) => {
+        $crate::stringlet_base!(align($kind $size $len $($align)?)  $($rest)+)
     };
-    (param($size:tt $fixed:tt $len:tt)  @ $align:tt:  $($rest:tt)+) => {
-        $crate::stringlet_base!(size($size $fixed $len $align)  $($rest)+)
+    (param($kind:tt $size:tt $len:tt)  @ $align:tt:  $($rest:tt)+) => {
+        $crate::stringlet_base!(size($kind $size $len $align)  $($rest)+)
     };
 
     // add default align?
-    (align($size:tt $fixed:tt $len:tt)  $($rest:tt)+) => {
-        $crate::stringlet_base!(size($size $fixed $len 1)  $($rest)+)
+    (align($kind:tt $size:tt $len:tt)  $($rest:tt)+) => {
+        $crate::stringlet_base!(size($kind $size $len 1)  $($rest)+)
     };
     (align$params:tt   $($rest:tt)+) => {
         $crate::stringlet_base!(size$params  $($rest)+)
     };
-    (align($size:tt $fixed:tt $len:tt $align:tt)   $($rest:tt)+) => {
-        $crate::stringlet_base!(size($size $fixed $len $align)  $($rest)+)
+    (align($kind:tt $size:tt $len:tt $align:tt)   $($rest:tt)+) => {
+        $crate::stringlet_base!(size($kind $size $len $align)  $($rest)+)
     };
 
     // add default size?
-    (size(! $fixed:tt $len:tt $align:tt)  [$str:expr $(, $strn:expr)*]) => {
-        $crate::stringlet_base!(gen({ ($str).len() } $fixed $len $align)  [$str $(, $strn)*])
+    (size($kind:tt ! $len:tt $align:tt)  [$str:expr $(, $strn:expr)*]) => {
+        $crate::stringlet_base!(gen($kind { ($str).len() } $len $align)  [$str $(, $strn)*])
     };
-    (size(! $fixed:tt $len:tt $align:tt)  $str:expr) => {
-        $crate::stringlet_base!(gen({ ($str).len() } $fixed $len $align)  $str)
+    (size($kind:tt ! $len:tt $align:tt)  $str:expr) => {
+        $crate::stringlet_base!(gen($kind { ($str).len() } $len $align)  $str)
     };
     (size$params:tt   $($rest:tt)+) => {
         $crate::stringlet_base!(gen$params  $($rest)+)
     };
-    (size($size:tt $fixed:tt $len:tt $align:tt)   $($rest:tt)+) => {
-        $crate::stringlet_base!(gen($size $fixed $len $align)  $($rest)+)
-    };
 
-    (gen($size:tt $fixed:tt $len:tt $align:tt)  [$($str:expr),+]) => {
+    (gen($kind:tt $size:tt $len:tt $align:tt)  [$($str:expr),+]) => {{
+        use $crate::*;
         [$(
-            $crate::StringletBase::<$size, $fixed, $len, $align>::_from_macro($str)
+            StringletBase::<$kind, $size, $len, $align>::_from_macro($str)
         ),+]
-    };
-    (gen($size:tt $fixed:tt $len:tt $align:tt)  $str:expr) => {
-        $crate::StringletBase::<$size, $fixed, $len, $align>::_from_macro($str)
-    };
+    }};
+    (gen($kind:tt $size:tt $len:tt $align:tt)  $str:expr) => {{
+        use $crate::*;
+        StringletBase::<$kind, $size, $len, $align>::_from_macro($str)
+    }};
 }
 
 /**
 Turn a const `str` expression into the smallest `Stringlet` that can contain it.
-Shorthand to optionally give generic parameters `SIZE` and `FIXED`. For now,
+Shorthand to optionally give generic parameters `SIZE` and `Self::FIXED`. For now,
 please check `README.md`.
 
 These are equivalent:
@@ -84,26 +83,36 @@ macro_rules! stringlet {
     (_:  $($rest:tt)+) => {
         $crate::stringlet_base!(gen(_ _ _ _)  $($rest)+)
     };
+
+    (trim  $($rest:tt)+) => {
+        $crate::stringlet_base!(param(Trim ! 0)  $($rest)+)
+    };
+    (t  $($rest:tt)+) => {
+        $crate::stringlet!(trim  $($rest)+)
+    };
+
     (var  $($rest:tt)+) => {
-        $crate::stringlet_base!(param(! false 1)  $($rest)+)
+        $crate::stringlet_base!(param(Var ! 1)  $($rest)+)
     };
     (v  $($rest:tt)+) => {
         $crate::stringlet!(var  $($rest)+)
     };
+
     (slim  $($rest:tt)+) => {
-        $crate::stringlet_base!(param(! false 0)  $($rest)+)
+        $crate::stringlet_base!(param(Slim ! 0)  $($rest)+)
     };
     (s  $($rest:tt)+) => {
         $crate::stringlet!(slim  $($rest)+)
     };
+
     ($size:tt $(@ $align:tt)?: $($rest:tt)+) => {
-        $crate::stringlet_base!(align($size true 0 $($align)?)  $($rest)+)
+        $crate::stringlet_base!(align(Fixed $size 0 $($align)?)  $($rest)+)
     };
     (@ $align:tt: $($rest:tt)+) => {
-        $crate::stringlet_base!(size(! true 0 $align)  $($rest)+)
+        $crate::stringlet_base!(size(Fixed ! 0 $align)  $($rest)+)
     };
     ($($rest:tt)+) => {
-        $crate::stringlet_base!(size(! true 0 1)  $($rest)+)
+        $crate::stringlet_base!(size(Fixed ! 0 1)  $($rest)+)
     };
 }
 
@@ -130,9 +139,9 @@ mod doctests {
 mod tests {
     use crate::*;
 
-    /* fn cmp<const SIZE: usize, const FIXED: bool, const LEN: usize, const ALIGN: u8>(slet: StringletBase<SIZE, FIXED, LEN, ALIGN>, str: &str)
+    /* fn cmp<const SIZE: usize, const Self::FIXED: bool, const LEN: usize, const ALIGN: u8>(slet: StringletBase<SIZE, Self::FIXED, LEN, ALIGN>, str: &str)
     where
-        StringletBase<SIZE, FIXED, LEN, ALIGN>: Config<SIZE, FIXED, LEN, ALIGN>, */
+        StringletBase<SIZE, Self::FIXED, LEN, ALIGN>: Config<SIZE, Self::FIXED, LEN, ALIGN>, */
     fn cmp<Slet: std::fmt::Debug>(slet: Slet, str: &str) {
         assert_eq!(format!("{:?}", slet), str);
     }

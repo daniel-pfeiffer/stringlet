@@ -19,8 +19,8 @@ impl_for! {
         if fmt.alternate() {
             write!(
                 fmt,
-                "{} {{ /* TODO adapt {{:#?}} to 3 variants */ ",
-                std::any::type_name::<Self>(),
+                "{} {{ /* TODO adapt {{:#?}} to 4 kinds */ ",
+                core::any::type_name::<Self>(),
             )?;
             let len = self.len();
             write!(fmt, "SIZE: {}, len(): {len}, [u8]: {:?}, ", SIZE, self.str)?;
@@ -49,7 +49,7 @@ impl_for! {
             write!(
                 fmt,
                 "{} {{ str: {:?}",
-                Self::type_name().join(""),
+                Self::type_name(),
                 self.as_str()
             )?;
         }

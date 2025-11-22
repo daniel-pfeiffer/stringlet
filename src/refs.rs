@@ -9,8 +9,8 @@ impl_for! {
 
     type Target = str;
 
-    #[inline(always)]
-    fn deref(&self) -> &Self::Target {
+    #[inline]
+    fn deref(&self) -> &str {
         self.as_str()
     }
 }
@@ -18,71 +18,47 @@ impl_for! {
 impl_for! {
     AsRef<str>:
 
-    #[inline(always)]
+    #[inline]
     fn as_ref(&self) -> &str {
-        self.as_str()
+        self
     }
 }
 
-impl<const SIZE: usize> AsRef<Stringlet<SIZE>> for str
-where
-    Stringlet<SIZE>: Config<SIZE>,
-{
-    /// Cast a `str` as a shared reference to a fixed size `Stringlet`.
-    /// The size may be inferred, but it must match the input length!
-    /// Alignment will be that of the input, so you can’t choose more than 1.
-    #[inline(always)]
-    fn as_ref(&self) -> &Stringlet<SIZE> {
-        assert_eq!(
-            self.len(),
-            SIZE,
-            "Cannot cast len {} str as &Stringlet<{SIZE}>",
-            self.len()
-        );
-        // SAFETY I’m not sure. It seems to cast the input bytes to Stringlet just fine.
-        unsafe { core::mem::transmute(&*(self.as_ptr() as *const Stringlet<SIZE>)) }
-    }
+macro_rules! impl_ref {
+    ($type:ty => $stringlet:ident, $kind:ident) => {
+        impl<const SIZE: usize> AsRef<$stringlet<SIZE>> for $type
+        where
+            $stringlet<SIZE>: Config<$kind, SIZE>,
+        {
+            #[doc = concat!("Cast a `", stringify!($type), "` as a shared reference to a [`", stringify!($stringlet), "`].")]
+            /// The size may be inferred, but it must match the input length!
+            /// Alignment will be that of the input, so you can’t choose more than 1.
+            #[inline]
+            fn as_ref(&self) -> &$stringlet<SIZE> {
+                assert_eq!(
+                    self.len(),
+                    SIZE,
+                    concat!("Cannot cast a len {} ", stringify!($type), " as &", stringify!($stringlet), "<SIZE>"),
+                    self.len()
+                );
+                // SAFETY I’m not sure. It seems to cast the input bytes to Stringlet just fine.
+                unsafe { core::mem::transmute(&*(self.as_ptr() as *const $stringlet<SIZE>)) }
+            }
+        }
+    };
 }
 
-impl<const SIZE: usize> AsRef<Stringlet<SIZE>> for String
-where
-    Stringlet<SIZE>: Config<SIZE>,
-{
-    /// Cast a `String` as a shared reference to a fixed size `Stringlet`.
-    /// The size may be inferred, but it must match the input length!
-    /// Alignment will be that of the input, so you can’t choose more than 1.
-    #[inline(always)]
-    fn as_ref(&self) -> &Stringlet<SIZE> {
-        assert_eq!(
-            self.len(),
-            SIZE,
-            "Cannot cast len {} String as &Stringlet<{SIZE}>",
-            self.len()
-        );
-        // SAFETY I’m not sure. It seems to cast the input bytes to Stringlet just fine.
-        unsafe { core::mem::transmute(&*(self.as_ptr() as *const Stringlet<SIZE>)) }
-    }
-}
+impl_ref!(str => Stringlet, Fixed);
+impl_ref!(str => TrimStringlet, Trim);
+impl_ref!(str => SlimStringlet, Slim);
 
-impl<const SIZE: usize> AsRef<Stringlet<SIZE>> for Box<str>
-where
-    Stringlet<SIZE>: Config<SIZE>,
-{
-    /// Cast a `Box<str>` as a shared reference to a fixed size `Stringlet`.
-    /// The size may be inferred, but it must match the input length!
-    /// Alignment will be that of the input, so you can’t choose more than 1.
-    #[inline(always)]
-    fn as_ref(&self) -> &Stringlet<SIZE> {
-        assert_eq!(
-            self.len(),
-            SIZE,
-            "Cannot cast len {} Box<str> as &Stringlet<{SIZE}>",
-            self.len()
-        );
-        // SAFETY I’m not sure. It seems to cast the input bytes to Stringlet just fine.
-        unsafe { core::mem::transmute(&*(self.as_ptr() as *const Stringlet<SIZE>)) }
-    }
-}
+impl_ref!(String => Stringlet, Fixed);
+impl_ref!(String => TrimStringlet, Trim);
+impl_ref!(String => SlimStringlet, Slim);
+
+impl_ref!(Box<str> => Stringlet, Fixed);
+impl_ref!(Box<str> => TrimStringlet, Trim);
+impl_ref!(Box<str> => SlimStringlet, Slim);
 
 #[cfg(test)]
 mod tests {
@@ -110,13 +86,9 @@ mod tests {
         macro_rules! test_borrow {
             ($a:ident = $in:expr, $size:literal) => {
                 let $a = $in;
-                let fs: &Stringlet<$size> = $a.as_ref();
-                assert_ne!(
-                    format!("{:p}", $a),
-                    format!("{:p}", fs),
-                    "fail {}",
-                    stringify!($in)
-                );
+                let str: &str = $a.as_ref();
+                let slet: &Stringlet<$size> = $a.as_ref();
+                assert_eq!(str.as_ptr(), slet.as_ptr(), "fail {}", stringify!($in));
             };
             ($a:expr) => {
                 test_borrow!(a = $a, 3);
@@ -125,8 +97,14 @@ mod tests {
         }
         test_borrow!("aha");
 
-        test_borrow!(&String::from("aha")[..]);
+        test_borrow!(String::from("aha"));
 
         test_borrow!(Box::<str>::from("aha"));
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_panics_when_ref_too_long() {
+        let _: &Stringlet<4> = "abc".as_ref();
     }
 }

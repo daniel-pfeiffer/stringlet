@@ -1,4 +1,8 @@
 #![doc = include_str!("../README.md")]
+#![deny(clippy::alloc_instead_of_core)]
+#![deny(clippy::std_instead_of_core)]
+/* #![no_std]
+extern crate alloc; */
 
 mod cmp;
 mod fmt;
@@ -16,29 +20,33 @@ mod traits;
     note = "`SlimStringlet` cannot be longer than 64 bytes. Consider using `VarStringlet`!"
 )]
 #[doc(hidden)]
-pub trait Config<
-    const SIZE: usize,
-    // Might combine these in an enum, but they are not allowed for generic parameters:
-    const FIXED: bool = true,
-    const LEN: usize = 0,
-    const ALIGN: u8 = 1,
->
-{
+pub trait Config<Kind, const SIZE: usize, const LEN: usize = 0, const ALIGN: u8 = 1> {
     type Aligned: Copy + Eq + Ord;
+    const ABBR: u8;
 }
 
+// Emulate enum, which generic can’t handle yet. No need for trait, as they’re constrained by Config.
+#[derive(Copy, Clone)]
+pub struct Fixed;
+#[derive(Copy, Clone)]
+pub struct Trim;
+#[derive(Copy, Clone)]
+pub struct Var;
+#[derive(Copy, Clone)]
+pub struct Slim;
+
 macro_rules! config {
-    ($msg:literal: $stringlet:ident, $aligned:ident, $fixed:tt, $len:literal, 1) => {
+    ($kind:ident $msg:literal: $stringlet:ident, $aligned:ident, $len:literal, 1) => {
         #[doc = concat!($msg, " length Stringlet")]
         pub type $stringlet<const SIZE: usize = 16> =
-            StringletBase<SIZE, $fixed, $len, 1>;
+            StringletBase<$kind, SIZE, $len, 1>;
     };
-    ($msg:literal: $stringlet:ident, $aligned:ident, $fixed:tt, $len:literal, $align:literal) => {
-        #[doc = concat!($msg, " length Stringlet", ", aligned to ", $align, " bytes")]
+    ($kind:ident $msg:literal: $stringlet:ident, $aligned:ident, $len:literal, $align:literal) => {
+        #[doc = concat!($msg, " length Stringlet, aligned to ", $align, " bytes")]
         pub type $stringlet<const SIZE: usize = 16> =
-            StringletBase<SIZE, $fixed, $len, $align>;
+            StringletBase<$kind, SIZE, $len, $align>;
     };
-    ($($stringlet:ident, $var_stringlet:ident, $slim_stringlet:ident: $aligned:ident @ $align:literal;)+) => {
+    ($($stringlet:ident, $trim_stringlet:ident, $var_stringlet:ident, $slim_stringlet:ident: $aligned:ident @ $align:literal;)+) => {
         $(
             #[doc(hidden)]
             #[repr(align($align))]
@@ -46,9 +54,10 @@ macro_rules! config {
             pub struct $aligned;
         )+
         $(
-            config!("Fixed": $stringlet, $aligned, true, 0, $align);
-            config!("Variable": $var_stringlet, $aligned, false, 1, $align);
-            config!("Slim variable": $slim_stringlet, $aligned, false, 0, $align);
+            config!(Fixed "Fixed": $stringlet, $aligned, 0, $align);
+            config!(Trim "Trimmed": $trim_stringlet, $aligned, 0, $align);
+            config!(Var "Variable": $var_stringlet, $aligned, 1, $align);
+            config!(Slim "Slim variable": $slim_stringlet, $aligned, 0, $align);
 
             // todo Is there an easier way to configure all valid sizes?
             config![ // for VarStringlet and SlimStringlet
@@ -66,95 +75,124 @@ macro_rules! config {
                 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203,
                 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222,
                 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241,
-                242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255: $aligned @ $align
+                242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255: Var $aligned @ 1, $align
             ];
         )+
     };
-    ($($size:literal),+: $aligned:ident @ $align:literal) => {
-        impl<const SIZE: usize> Config<SIZE, true, 0, $align>
-            for StringletBase<SIZE, true, 0, $align> { type Aligned = $aligned; }
-        config![+ $($size),+: $aligned @ $align];
-        $(
-            impl Config<$size, false, 0, $align>
-                for StringletBase<$size, false, 0, $align> { type Aligned = $aligned; }
-        )+
+    ($($size:tt),+: $aligned:ident @ $align:literal) => {
+        /* impl<const SIZE: usize> Config<Fixed, SIZE, 0, $align>
+            for StringletBase<Fixed, SIZE, 0, $align> { type Aligned = $aligned; }
+        impl<const SIZE: usize> Config<Trim, SIZE, 0, $align>
+            for StringletBase<Trim, SIZE, 0, $align> { type Aligned = $aligned; } */
+        config![+ SIZE: Fixed $aligned @ $align];
+        config![+ SIZE: Trim $aligned @ $align];
+        config![+ $($size),+: Var $aligned @ 1, $align];
+        config![+ $($size),+: Slim $aligned @ 0, $align];
     };
-    (+ $($size:literal),+: $aligned:ident @ $align:literal) => {
+    (+ SIZE: $kind:ident $aligned:ident @ $align:literal) => {
+        impl<const SIZE: usize> Config<$kind, SIZE, 0, $align>
+            for StringletBase<$kind, SIZE, 0, $align>
+        {
+            type Aligned = $aligned;
+            const ABBR: u8 = stringify!($kind).as_bytes()[0];
+        }
+    };
+    (+ $($size:tt),+: $kind:ident $aligned:ident @ $len:literal, $align:literal) => {
         $(
-            impl Config<$size, false, 1, $align>
-                for StringletBase<$size, false, 1, $align> { type Aligned = $aligned; }
+            impl Config<$kind, $size, $len, $align>
+                for StringletBase<$kind, $size, $len, $align>
+            {
+                type Aligned = $aligned;
+                const ABBR: u8 = stringify!($kind).as_bytes()[0];
+            }
         )+
     };
 }
 
 config! {
-    Stringlet,   VarStringlet,   SlimStringlet:   Align1  @  1;
-    Stringlet2,  VarStringlet2,  SlimStringlet2:  Align2  @  2;
-    Stringlet4,  VarStringlet4,  SlimStringlet4:  Align4  @  4;
-    Stringlet8,  VarStringlet8,  SlimStringlet8:  Align8  @  8;
-    Stringlet16, VarStringlet16, SlimStringlet16: Align16 @ 16;
-    Stringlet32, VarStringlet32, SlimStringlet32: Align32 @ 32;
-    Stringlet64, VarStringlet64, SlimStringlet64: Align64 @ 64;
+    Stringlet,   TrimStringlet,   VarStringlet,   SlimStringlet:   Align1  @  1;
+    Stringlet2,  TrimStringlet2,  VarStringlet2,  SlimStringlet2:  Align2  @  2;
+    Stringlet4,  TrimStringlet4,  VarStringlet4,  SlimStringlet4:  Align4  @  4;
+    Stringlet8,  TrimStringlet8,  VarStringlet8,  SlimStringlet8:  Align8  @  8;
+    Stringlet16, TrimStringlet16, VarStringlet16, SlimStringlet16: Align16 @ 16;
+    Stringlet32, TrimStringlet32, VarStringlet32, SlimStringlet32: Align32 @ 32;
+    Stringlet64, TrimStringlet64, VarStringlet64, SlimStringlet64: Align64 @ 64;
 }
 
-/// An inline String 0 to 64 bytes, which can be handled like a primitive type.
+/// An inline String of varying size bounds, which can be handled like a primitive type.
 #[derive(Copy, Clone)]
 pub struct StringletBase<
+    Kind,
     const SIZE: usize,
-    const FIXED: bool = true,
+    // Have to make LEN explicit, as (unlike type Aligned) we can’t pick up a const from Config.
+    // We could put the whole [u8; LEN] into an associated type, but then it would be opaque to us.
     const LEN: usize = 0,
     const ALIGN: u8 = 1,
 > where
-    Self: Config<SIZE, FIXED, LEN, ALIGN>,
+    Self: Config<Kind, SIZE, LEN, ALIGN>,
 {
     /// Zero size type that is aligned according to `ALIGN` and never touched.
-    pub(crate) _align: [<Self as Config<SIZE, FIXED, LEN, ALIGN>>::Aligned; 0],
+    pub(crate) _align: [<Self as Config<Kind, SIZE, LEN, ALIGN>>::Aligned; 0],
     /// The actual payload, if it is shorter than SIZE, either LEN == 1 or its last bytes will be tagged.
     pub(crate) str: [u8; SIZE],
-    /// Limited by `Config<SIZE, FIXED, LEN, ALIGN>` to either 0 or 1 byte for an explicit length.
-    // Can’t make previous SIZE + LEN, as “generic parameters may not be used in const operations”
+    /// Limited by `Config<SIZE, Self::FIXED, LEN, ALIGN>` to either 0 or 1 byte for an explicit length.
+    // str can’t be SIZE + LEN, as “generic parameters may not be used in const operations”
     pub(crate) len: [u8; LEN],
 }
 
-/** Hide repeated boilerplate caused by lack of nested impls.
+/// A 2<sup>nd</sup> generic StringletBase
+macro_rules! self2 {
+    () => {
+        StringletBase<Kind2, SIZE2, LEN2, ALIGN2>
+    };
+}
+
+/** Impl `SomeTrait` for `Self`, hiding repeated boilerplate caused by lack of nested impls.
 ```ignore
 impl_for! { SomeTrait }
-impl_for! { <'a, 2> SomeTrait: impl_body }
+impl_for! { SomeTrait: impl_body }
+impl_for! { <'a, 2> SomeTrait<self2!()>: impl_body }
 ```
-where `'a`, `2` and impl_body are optional, `2` meaning 2<sup>nd</sup> Stringlet.
+where `'a`, `2` and impl_body are all optional, `2` meaning 2<sup>nd</sup> generic Stringlet.
 */
 macro_rules! impl_for {
-    ($two:literal [$($lt:lifetime)?] $trait:ty $(: $($rest:tt)+)?) => {
-        impl<
-            $($lt,)? const SIZE: usize, const FIXED: bool, const LEN: usize, const ALIGN: u8,
-            const SIZE2: usize, const FIXED2: bool, const LEN2: usize, const ALIGN2: u8,
-        > $trait
-            for StringletBase<SIZE, FIXED, LEN, ALIGN>
-        where
-            Self: Config<SIZE, FIXED, LEN, ALIGN>,
-            StringletBase<SIZE2, FIXED2, LEN2, ALIGN2>: Config<SIZE2, FIXED2, LEN2, ALIGN2>,
-        {
-             $($($rest)+)?
-        }
-    };
-    ([$($lt:lifetime)?] $trait:ty $(: $($rest:tt)+)?) => {
-        impl<
-            $($lt,)? const SIZE: usize, const FIXED: bool, const LEN: usize, const ALIGN: u8,
-        > $trait
-            for StringletBase<SIZE, FIXED, LEN, ALIGN>
-        where
-            Self: Config<SIZE, FIXED, LEN, ALIGN>,
-        {
-             $($($rest)+)?
-        }
-    };
-    // Split this, as compiler says optional <…> is ambiguous
-    (<$($lt:lifetime)? $(,)? $($two:literal)?> $trait:ty $(: $($rest:tt)+)?) => {
-        impl_for!($($two)? [$($lt)?] $trait $(: $($rest)+)?);
+    // Split this rule, otherwise compiler says optional <…> is ambiguous
+    // $two should match nothing, but marks that 2 was matched.
+    (<$($lt:lifetime)? $(,)? $(2 $($two:literal)?)?> $trait:ty $(: $($rest:tt)+)?) => {
+        impl_for!(@ $(2 $($two)?)? $($lt)?; $trait: $($($rest)+)?);
     };
     ($trait:ty $(: $($rest:tt)+)?) => {
-        impl_for!([] $trait $(: $($rest)+)?);
+        impl_for!(@ ; $trait: $($($rest)+)?);
+    };
+
+    (@ $(2 $($two:literal)?)? $($lt:lifetime)?; $trait:ty: $($rest:tt)*) => {
+        impl_for!(@@
+            $(2 $($two)?)?
+            $($lt)?
+            [Kind, const SIZE: usize, const LEN: usize, const ALIGN: u8,]
+            [StringletBase<Kind, SIZE, LEN, ALIGN>: Config<Kind, SIZE, LEN, ALIGN>,]
+            $trait:
+            $($rest)*
+        );
+    };
+    (@@ 2 $($lt:lifetime)? [$($gen:tt)+] [$($where:tt)+] $trait:ty: $($rest:tt)*) => {
+        impl_for!(@@
+            $($lt)?
+            [$($gen)+ Kind2, const SIZE2: usize, const LEN2: usize, const ALIGN2: u8]
+            [$($where)+ self2!(): Config<Kind2, SIZE2, LEN2, ALIGN2>,]
+            $trait:
+            $($rest)*
+        );
+    };
+    (@@ $($lt:lifetime)? [$($gen:tt)+] [$($where:tt)+] $trait:ty: $($rest:tt)*) => {
+        impl<$($lt,)? $($gen)+> $trait
+        for StringletBase<Kind, SIZE, LEN, ALIGN>
+        where $($where)+
+        {
+            $($rest)*
+        }
     };
 }
 
 pub(crate) use impl_for;
+pub(crate) use self2;
