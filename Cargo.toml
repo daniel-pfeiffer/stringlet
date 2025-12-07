@@ -1,7 +1,7 @@
 [package]
 name = "stringlet"
-version = "0.5.0"
-description = "A fast, cheap, compile-time constructible, `Copy`-able, kinda primitive inline string type with 4 variants."
+version = "0.6.0"
+description = "A fast, cheap, compile-time constructible, Copy-able, kinda primitive inline string type with 4 variants."
 edition = "2024"
 license = "GPL-2.0-or-later OR Apache-2.0"
 authors = ["Daniel Pfeiffer <occitan@esperanto.org>"]

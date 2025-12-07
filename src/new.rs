@@ -5,7 +5,7 @@ macro_rules! new {
     ($kind:ident [$($gen:tt)*] $size:tt, $len:literal) => {
         impl<$($gen)* const ALIGN: u8> StringletBase<$kind, $size, $len, ALIGN>
         where
-            Self: Config<$kind, $size, $len, ALIGN>,
+            Self: ConfigBase<$kind, $size, $len, ALIGN>,
         {
             pub const fn new() -> Self {
                 // SAFETY always short enough and no bytes that can have a UTF-8 error
@@ -15,7 +15,7 @@ macro_rules! new {
 
         impl<$($gen)* const ALIGN: u8> Default for StringletBase<$kind, $size, $len, ALIGN>
         where
-            Self: Config<$kind, $size, $len, ALIGN>,
+            Self: ConfigBase<$kind, $size, $len, ALIGN>,
         {
             fn default() -> Self {
                 Self::new()
@@ -34,7 +34,7 @@ new! { Slim [const SIZE: usize,] SIZE, 0 }
 // A fixed Stringlet can only be empty for SIZE 0.
 /* impl<const ALIGN: u8> StringletBase<Fixed, 0, 0, ALIGN>
 where
-    Self: Config<Fixed, 0, 0, ALIGN>,
+    Self: ConfigBase<Fixed, 0, 0, ALIGN>,
 {
     pub const fn new() -> Self {
         // SAFETY always short enough and no bytes that can have a UTF-8 error
@@ -44,7 +44,7 @@ where
 
 impl<const ALIGN: u8> Default for StringletBase<Fixed, 0, 0, ALIGN>
 where
-    Self: Config<Fixed, 0, 0, ALIGN>,
+    Self: ConfigBase<Fixed, 0, 0, ALIGN>,
 {
     fn default() -> Self {
         Self::new()
@@ -54,7 +54,7 @@ where
 // A variable Stringlet, slim or not, can always be empty.
 impl<const SIZE: usize, const LEN: usize, const ALIGN: u8> StringletBase<SIZE, false, LEN, ALIGN>
 where
-    Self: Config<SIZE, false, LEN, ALIGN>,
+    Self: ConfigBase<SIZE, false, LEN, ALIGN>,
 {
     pub const fn new() -> Self {
         // SAFETY always short enough and no bytes that can have a UTF-8 error
@@ -65,7 +65,7 @@ where
 impl<const SIZE: usize, const LEN: usize, const ALIGN: u8> Default
     for StringletBase<SIZE, false, LEN, ALIGN>
 where
-    Self: Config<SIZE, false, LEN, ALIGN>,
+    Self: ConfigBase<SIZE, false, LEN, ALIGN>,
 {
     fn default() -> Self {
         Self::new()

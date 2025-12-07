@@ -28,7 +28,7 @@ macro_rules! impl_ref {
     ($type:ty => $stringlet:ident, $kind:ident) => {
         impl<const SIZE: usize> AsRef<$stringlet<SIZE>> for $type
         where
-            $stringlet<SIZE>: Config<$kind, SIZE>,
+            $stringlet<SIZE>: ConfigBase<$kind, SIZE>,
         {
             #[doc = concat!("Cast a `", stringify!($type), "` as a shared reference to a [`", stringify!($stringlet), "`].")]
             /// The size may be inferred, but it must match the input length!
@@ -69,6 +69,8 @@ mod tests {
         let s = Stringlet::<3>::from("Abc");
         assert!(s.contains('b'));
         let s = VarStringlet::<4>::from("Abc");
+        assert!(s.contains('b'));
+        let s = TrimStringlet::<4>::from("Abc");
         assert!(s.contains('b'));
         let s = SlimStringlet::<4>::from("Abc");
         assert!(s.contains('b'));

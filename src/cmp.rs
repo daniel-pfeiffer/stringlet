@@ -24,18 +24,19 @@ impl_for! {
             (_, true, true, ..) => false,
 
             // Else either fixed can only be eq to trim if shorter by 1; and it doesn’t need a dynamic slice
-            (_, true, _, _, true) => SIZE < SIZE2 && SIZE + 1 == SIZE2 && self.str == other.str[..other.len()],
-            (_, _, true, true, _) => SIZE > SIZE2 && SIZE == SIZE2 + 1 && self.str[..self.len()] == other.str,
+            (_, true, _, _, true) => SIZE < SIZE2 && SIZE + 1 == SIZE2 && self.str == other.as_bytes(),
+            (_, _, true, true, _) => SIZE > SIZE2 && SIZE == SIZE2 + 1 && self.as_bytes() == other.str,
 
             // Else either fixed can only be eq if shorter; and it doesn’t need a dynamic slice
-            (_, true, ..) => SIZE < SIZE2 && self.str == other.str[..other.len()],
-            (_, _, true, ..) => SIZE > SIZE2 && self.str[..self.len()] == other.str,
+            (_, true, ..) => SIZE < SIZE2 && self.str == other.as_bytes(),
+            (_, _, true, ..) => SIZE > SIZE2 && self.as_bytes() == other.str,
 
             // Else either trim can only be eq if shorter or longer by 1
-            (.., true, _) => (SIZE < SIZE2 || SIZE == SIZE2 + 1) && self.str[..self.len()] == other.str[..other.len()],
-            (.., true) => (SIZE > SIZE2 || SIZE + 1 == SIZE2) && self.str[..self.len()] == other.str[..other.len()],
+            (.., true, _) => (SIZE < SIZE2 || SIZE == SIZE2 + 1) && self.as_bytes() == other.as_bytes(),
+            (.., true) => (SIZE > SIZE2 || SIZE + 1 == SIZE2) && self.as_bytes() == other.as_bytes(),
 
-            _ => self.str[..self.len()] == other.str[..other.len()],
+            // Else must do full cmp with dynamic lengths
+            _ => self.as_bytes() == other.as_bytes(),
         }
     }
 }
@@ -57,9 +58,9 @@ impl_for! {
         if SIZE == 0 {
             other.is_empty()
         } else if Self::FIXED {
-            self.str == *other.as_bytes()
+            self.str == other.as_bytes()
         } else {
-            self.str[..self.len()] == *other.as_bytes()
+            self.as_bytes() == other.as_bytes()
         }
     }
 }
@@ -112,11 +113,11 @@ impl_for! {
         Some(if Self::FIXED && other.is_fixed() {
             self.str[..].cmp(&other.str[..])
         } else if Self::FIXED {
-            self.str[..].cmp(&other.str[..other.len()])
+            self.str[..].cmp(other.as_bytes())
         } else if other.is_fixed() {
-            self.str[..self.len()].cmp(&other.str[..])
+            self.as_bytes().cmp(&other.str[..])
         } else {
-            self.str[..self.len()].cmp(&other.str[..other.len()])
+            self.as_bytes().cmp(other.as_bytes())
         })
     }
 }
@@ -137,7 +138,7 @@ impl_for! {
         if Self::FIXED {
             self.str[..].partial_cmp(other.as_bytes())
         } else {
-            self.str[..self.len()].partial_cmp(other.as_bytes())
+            self.as_bytes().partial_cmp(other.as_bytes())
         }
     }
 }
@@ -205,7 +206,8 @@ mod tests {
                 stringlet!(s: "xy"),
                 stringlet!(s 3: "xy"),
                 stringlet!(s 4: "xy"),
-                /* stringlet!("xyz"),
+                /* These do not really improve coverage, but explode combinatorics:
+                stringlet!("xyz"),
                 stringlet!(v: "xyz"),
                 stringlet!(v 4: "xyz"),
                 stringlet!(v 5: "xyz"),

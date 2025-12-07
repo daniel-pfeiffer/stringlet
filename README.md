@@ -9,7 +9,7 @@ This is an <b>alpha release</b>. Using it as <code>str</code> should mostly work
 <code>String</code> functionality, but that needs to be implemented.
 </div>
 
-In my casual benchmarking it beats all other string kinds and crates nicely to spectacularly on various tests. There are
+In my casual benchmarking it beats all other string kinds and crates nicely to spectacularly on some tests. There are
 four flavors of mostly the same code. They differ in length handling, which shows only in some operations, like
 `len()`, `as_ref()`, and `as_str()`:
 
@@ -28,6 +28,7 @@ four flavors of mostly the same code. They differ in length handling, which show
   the length into 6 bits of the last byte, when content is less than full size. Length must be `0..=64`. Though it is
   done branchlessly, there are a few more ops for length calculation. Hence this is the slowest, albeit by a small
   margin. I’m still racking my brain for how to do it with less ops. Any bit hackers, welcome on board!
+
 
 N.B.: Variable size `VarStringlet` seems a competitor to [`fixedstr::str`](https://crates.io/crates/fixedstr),
 [`arrayvec::ArrayString`](https://crates.io/crates/arrayvec), and the semi-official
@@ -121,3 +122,14 @@ affect performance.
 - [ ] Is there a downside to `Copy` by default?
 
 - [ ] What’s our minimal rust-version?
+
+Dedicated to my father, who taught me the iconic Northgerman [▶ String song](https://youtu.be/ByYTEReqf4Q?list=RDByYTEReqf4Q&t=38):
+
+<blockquote><i>An’ne Eck steiht ’n Jung mit’n Tüddelband<br>
+in’ne anner Hand ’n Bodderbrood mit Kees,<br>
+wenn he blots ni mit de Been in’n Tüddel keem<br>
+un dor liggt he ok all lang op de Nees<br>
+un he rasselt mit’n Dassel op’n Kantsteen<br>
+un he bitt sick ganz geheurig op de Tung,<br>
+as he opsteiht, seggt he: Hett ni weeh doon,<br>
+dat’s’n Klacks för so’n Kieler Jung</i></blockquote>

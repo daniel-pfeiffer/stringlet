@@ -20,7 +20,7 @@ macro_rules! consts {
         $(
             #[allow(unused)]
             pub(crate) const $const: bool =
-                Self::ABBR == stringify!($const).as_bytes()[0];
+                Kind::ABBR == stringify!($const).as_bytes()[0];
             #[allow(unused)]
             pub(crate) const fn $fn(&self) -> bool {
                 Self::$const
@@ -29,10 +29,10 @@ macro_rules! consts {
     };
 }
 
-impl<Kind, const SIZE: usize, const LEN: usize, const ALIGN: u8>
+impl<Kind: StringletKind, const SIZE: usize, const LEN: usize, const ALIGN: u8>
     StringletBase<Kind, SIZE, LEN, ALIGN>
 where
-    Self: Config<Kind, SIZE, LEN, ALIGN>,
+    Self: ConfigBase<Kind, SIZE, LEN, ALIGN>,
 {
     consts! {
         is_fixed -> FIXED;
@@ -40,6 +40,7 @@ where
         is_var -> VAR;
         is_slim -> SLIM;
     }
+
     pub const fn from_str(str: &str) -> Result<Self, ()> {
         if Self::fits(str.len()) {
             // SAFETY we checked the length
@@ -128,22 +129,24 @@ where
 
     #[inline(always)]
     pub const fn len(&self) -> usize {
+        // optimizer should elide all but one if-branch
         if Self::FIXED || SIZE == 0 {
             return SIZE;
+        } else if Self::VAR {
+            // For VarStringlet look no further
+            return self.len[0] as _;
         }
 
         let last = self.last();
-        if Self::TRIM {
-            SIZE - (last > TAG) as usize
-        } else if Self::VAR {
-            // For VarStringlet look no further
-            self.len[0] as _
-        }
-        // Only SlimStringlet after here
-        else if SIZE == 1 {
+        if SIZE == 1 {
             // iff single byte is untagged we have 1
             (last < TAG) as _
-        } else if SIZE == 64 {
+        } else if Self::TRIM {
+            // branchless: if last is tagged, subtract one
+            SIZE - (last > TAG) as usize
+        }
+        // Next two SlimStringlet
+        else if SIZE == 64 {
             // 64 is special as we only store 6 bits, where 0b00_0000 means SIZE-0b100_0000
             SIZE - (last == TAG) as usize * SIZE - (last > TAG) as usize * (last ^ TAG) as usize
         } else {
@@ -182,8 +185,10 @@ where
         if Self::FIXED {
             &self.str
         } else {
-            // No [..self.len()] in const yet, asm differs in debug but same as slice in release
-            self.str.split_at(self.len()).0
+            // const equivalent of [..self.len()], asm differs in debug but same as slice in release
+            //self.str.split_at(self.len()).0
+            // SAFETY This is what String aka Vec uses and all bytes are initialized. This is 30% faster than split_at.
+            unsafe { core::slice::from_raw_parts(self.str.as_ptr(), self.len()) }
         }
     }
 
@@ -291,10 +296,10 @@ mod tests {
 
     fn test_all_lengths<const SIZE: usize>()
     where
-        // Does using these types generically really have to be so hard?
-        Stringlet<SIZE>: Config<Fixed, SIZE>,
-        VarStringlet<SIZE>: Config<Var, SIZE, 1>,
-        SlimStringlet<SIZE>: Config<Slim, SIZE>,
+        Stringlet<SIZE>: Config<SIZE>,
+        VarStringlet<SIZE>: VarConfig<SIZE>,
+        TrimStringlet<SIZE>: TrimConfig<SIZE>,
+        SlimStringlet<SIZE>: SlimConfig<SIZE>,
     {
         const STR64: &str = "0123456789_123456789_123456789_123456789_123456789_123456789_123";
         for len in 0..=SIZE {
@@ -308,6 +313,9 @@ mod tests {
         let fixed: Stringlet<SIZE> = (&STR64[..SIZE]).into();
         assert_eq!(fixed.is_empty(), SIZE == 0);
         assert_eq!(fixed.len(), SIZE);
+        let trim: TrimStringlet<SIZE> = (&STR64[..SIZE]).into();
+        assert_eq!(trim.is_empty(), SIZE == 0);
+        assert_eq!(trim.len(), SIZE);
     }
     #[test]
     fn test_len() {

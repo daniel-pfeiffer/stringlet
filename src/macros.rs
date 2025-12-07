@@ -141,7 +141,7 @@ mod tests {
 
     /* fn cmp<const SIZE: usize, const Self::FIXED: bool, const LEN: usize, const ALIGN: u8>(slet: StringletBase<SIZE, Self::FIXED, LEN, ALIGN>, str: &str)
     where
-        StringletBase<SIZE, Self::FIXED, LEN, ALIGN>: Config<SIZE, Self::FIXED, LEN, ALIGN>, */
+        StringletBase<SIZE, Self::FIXED, LEN, ALIGN>: ConfigBase<SIZE, Self::FIXED, LEN, ALIGN>, */
     fn cmp<Slet: std::fmt::Debug>(slet: Slet, str: &str) {
         assert_eq!(format!("{:?}", slet), str);
     }
