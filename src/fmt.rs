@@ -1,6 +1,6 @@
 //! `Display` and `Debug` for Stringlet
 
-use crate::{methods::TAG, *};
+use crate::*;
 
 use core::fmt::{Debug, Display, Error, Formatter};
 

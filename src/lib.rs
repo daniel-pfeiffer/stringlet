@@ -12,6 +12,19 @@ mod new;
 mod refs;
 mod traits;
 
+/**
+Magic sauce for a UTF-8 hack: a byte containing two high bits is not a valid last byte.
+Use this a a marker to distinguish whether we use the full length. Otherwise the lower bits contain
+the length of the unused tail. At full length there is no tagged last byte, so we only need to encode
+64 lengths. Which is where this crate’s length limit comes from.
+
+To enable simple eq-test, always put the same value on all unused bytes! Counting from the end, i.e.
+the length of the unused tail, makes the branchless implementation of `len()` more efficient.
+
+If you change the semantics, `option_env!("STRINGLET_RAW_DEBUG")` is your friend.
+*/
+pub(crate) const TAG: u8 = 0b11_000000;
+
 /// Configure `StringletBase` to have only valid generic parameters.
 #[diagnostic::on_unimplemented(
     message = "`VarStringlet<{SIZE}>` or `SlimStringlet<{SIZE}>` has excessive SIZE",
@@ -27,7 +40,7 @@ pub trait ConfigBase<Kind, const SIZE: usize = 16, const LEN: usize = 0, const A
 pub trait StringletKind {
     const ABBR: u8;
 }
-// Emulate enum, which generic can’t handle yet. No need for trait, as they’re constrained by ConfigBase.
+// Emulate enum, which generic can’t handle yet.
 #[derive(Copy, Clone)]
 pub enum Fixed {}
 impl StringletKind for Fixed {
@@ -237,3 +250,28 @@ macro_rules! impl_for {
 
 pub(crate) use impl_for;
 pub(crate) use self2;
+
+#[cfg(doctest)]
+mod doctests {
+    /**
+    ```compile_fail
+    let _x: stringlet::VarStringlet<256>;
+    ```
+    */
+    fn test_var_stringlet_256_compile_fail() {}
+
+    /**
+    ```compile_fail
+    let _x: stringlet::SlimStringlet<65>;
+    ```
+    */
+    fn test_slim_stringlet_65_compile_fail() {}
+
+    /**
+    ```compile_fail
+    # use stringlet::StringletBase;
+    let _x: StringletBase::<0, true, 1>;
+    ```
+    */
+    fn test_fixed_1_compile_fail() {}
+}
