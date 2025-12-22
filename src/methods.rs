@@ -16,10 +16,9 @@ macro_rules! consts {
     };
 }
 
-impl<Kind: StringletKind, const SIZE: usize, const LEN: usize, const ALIGN: u8>
-    StringletBase<Kind, SIZE, LEN, ALIGN>
+impl<Kind: StringletKind, const SIZE: usize, const LEN: usize> StringletBase<Kind, SIZE, LEN>
 where
-    Self: ConfigBase<Kind, SIZE, LEN, ALIGN>,
+    Self: ConfigBase<Kind, SIZE, LEN>,
 {
     consts! {
         is_fixed -> FIXED;
@@ -106,7 +105,7 @@ where
 
     /// Name for now as a String
     pub(crate) fn type_name() -> String {
-        // todo longest: TrimStringlet64<usize::MAX> -> VarStringlet<37>
+        // todo longest: TrimStringlet<usize::MAX> -> VarStringlet<35>
         use core::fmt::Write;
         let mut ret = String::with_capacity(20) // mostly enough
             + if Self::FIXED {
@@ -118,9 +117,6 @@ where
             } else {
                 "SlimStringlet"
             };
-        if ALIGN > 1 {
-            _ = write!(ret, "{}", ALIGN);
-        }
         if SIZE != 16 {
             _ = write!(ret, "<{}>", SIZE);
         }
@@ -131,6 +127,8 @@ where
     pub(crate) const fn fits(len: usize) -> bool {
         if Self::FIXED {
             len == SIZE
+        } else if Self::TRIM {
+            len == SIZE || len + 1 == SIZE
         } else {
             len <= SIZE
         }
@@ -260,12 +258,7 @@ mod tests {
         }
         test_it!(Stringlet);
         test_it!(VarStringlet);
+        test_it!(TrimStringlet);
         test_it!(SlimStringlet);
-        test_it!(Stringlet2);
-        test_it!(VarStringlet4);
-        test_it!(SlimStringlet8);
-        test_it!(Stringlet16);
-        test_it!(VarStringlet32);
-        test_it!(SlimStringlet64);
     }
 }

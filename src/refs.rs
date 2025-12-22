@@ -32,7 +32,6 @@ macro_rules! impl_ref {
         {
             #[doc = concat!("Cast a `", stringify!($type), "` as a shared reference to a [`", stringify!($stringlet), "`].")]
             /// The size may be inferred, but it must match the input length!
-            /// Alignment will be that of the input, so you can’t choose more than 1.
             #[inline]
             fn as_ref(&self) -> &$stringlet<SIZE> {
                 assert_eq!(

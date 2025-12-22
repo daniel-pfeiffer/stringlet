@@ -2,10 +2,9 @@
 
 use crate::*;
 
-impl<Kind: StringletKind, const SIZE: usize, const LEN: usize, const ALIGN: u8>
-    StringletBase<Kind, SIZE, LEN, ALIGN>
+impl<Kind: StringletKind, const SIZE: usize, const LEN: usize> StringletBase<Kind, SIZE, LEN>
 where
-    Self: ConfigBase<Kind, SIZE, LEN, ALIGN>,
+    Self: ConfigBase<Kind, SIZE, LEN>,
 {
     pub const fn from_str(str: &str) -> Result<Self, ()> {
         if Self::fits(str.len()) {
@@ -31,6 +30,8 @@ where
             unsafe { Self::from_str_unchecked(str) }
         } else if Self::FIXED {
             panic!("stringlet!(...): parameter too short or too long.")
+        } else if Self::TRIM {
+            panic!("stringlet!(trim ...): parameter too short or too long.")
         } else {
             panic!("stringlet!(var|slim ...): parameter too long.")
         }
@@ -46,9 +47,9 @@ where
     /// It is the callers responsibility to ensure that the content is UTF-8.
     pub const unsafe fn from_utf8_bytes_unchecked(str: [u8; SIZE]) -> Self {
         Self {
-            _align: [],
             str,
             len: [str.len() as _; _],
+            _kind: PhantomData,
         }
     }
 
@@ -74,7 +75,6 @@ where
         let str = str_uninit.as_mut_ptr() as *mut u8;
 
         Self {
-            _align: [],
             // SAFETY we only write to uninit via pointer methods before Rust sees the value
             str: unsafe {
                 core::ptr::copy_nonoverlapping(bytes.as_ptr(), str, bytes_len);
@@ -85,15 +85,16 @@ where
                 str_uninit.assume_init()
             },
             len: [bytes_len as _; _],
+            _kind: PhantomData,
         }
     }
 }
 
 macro_rules! new {
     ($kind:ident [$($gen:tt)*] $size:tt, $len:literal) => {
-        impl<$($gen)* const ALIGN: u8> StringletBase<$kind, $size, $len, ALIGN>
+        impl<$($gen)*> StringletBase<$kind, $size, $len>
         where
-            Self: ConfigBase<$kind, $size, $len, ALIGN>,
+            Self: ConfigBase<$kind, $size, $len>,
         {
             pub const fn new() -> Self {
                 // SAFETY always short enough and no bytes that can have a UTF-8 error
@@ -101,9 +102,9 @@ macro_rules! new {
             }
         }
 
-        impl<$($gen)* const ALIGN: u8> Default for StringletBase<$kind, $size, $len, ALIGN>
+        impl<$($gen)*> Default for StringletBase<$kind, $size, $len>
         where
-            Self: ConfigBase<$kind, $size, $len, ALIGN>,
+            Self: ConfigBase<$kind, $size, $len>,
         {
             fn default() -> Self {
                 Self::new()
