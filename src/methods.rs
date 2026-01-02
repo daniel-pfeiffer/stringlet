@@ -1,4 +1,4 @@
-//! Many implementations to make Stringlet easy to use.
+//! Many implementations to make stringlet easy to use.
 
 use crate::*;
 
@@ -16,10 +16,7 @@ macro_rules! consts {
     };
 }
 
-impl<Kind: StringletKind, const SIZE: usize, const LEN: usize> StringletBase<Kind, SIZE, LEN>
-where
-    Self: ConfigBase<Kind, SIZE, LEN>,
-{
+impl<Kind: StringletKind, const SIZE: usize, const LEN: usize> StringletBase<Kind, SIZE, LEN> {
     consts! {
         is_fixed -> FIXED;
         is_trim -> TRIM;
@@ -124,17 +121,6 @@ where
     }
 
     #[inline(always)]
-    pub(crate) const fn fits(len: usize) -> bool {
-        if Self::FIXED {
-            len == SIZE
-        } else if Self::TRIM {
-            len == SIZE || len + 1 == SIZE
-        } else {
-            len <= SIZE
-        }
-    }
-
-    #[inline(always)]
     pub(crate) const fn last(&self) -> u8 {
         debug_assert!(SIZE != 0, "unchecked call");
         self.str[SIZE - 1]
@@ -175,9 +161,7 @@ mod tests {
 
     fn test_all_lengths<const SIZE: usize>()
     where
-        Stringlet<SIZE>: Config<SIZE>,
         VarStringlet<SIZE>: VarConfig<SIZE>,
-        TrimStringlet<SIZE>: TrimConfig<SIZE>,
         SlimStringlet<SIZE>: SlimConfig<SIZE>,
     {
         const STR64: &str = "0123456789_123456789_123456789_123456789_123456789_123456789_123";

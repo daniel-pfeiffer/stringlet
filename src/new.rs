@@ -1,4 +1,4 @@
-//! Stringlet creation, `new()` and `default()` only where they make sence.
+//! Creation of stringlets, `new()` and `default()` panic at compile time, unless they make sence.
 
 use crate::*;
 
@@ -6,6 +6,20 @@ impl<Kind: StringletKind, const SIZE: usize, const LEN: usize> StringletBase<Kin
 where
     Self: ConfigBase<Kind, SIZE, LEN>,
 {
+    /** Create an empty `Self``. Will panic if type can’t be empty, e.g. `Stringlet<1>` or  `TrimStringlet<2>` */
+    #[inline(always)]
+    pub const fn new() -> Self {
+        const {
+            if Self::FIXED {
+                assert!(SIZE == 0, "Stringlet<1> or longer cannot be empty");
+            } else if Self::TRIM {
+                assert!(SIZE <= 1, "TrimStringlet<2> or longer cannot be empty");
+            }
+        }
+        // SAFETY always short enough and no bytes that can have a UTF-8 error
+        unsafe { Self::from_utf8_unchecked(&[]) }
+    }
+
     pub const fn from_str(str: &str) -> Result<Self, ()> {
         if Self::fits(str.len()) {
             // SAFETY we checked the length
@@ -20,21 +34,6 @@ where
     pub const unsafe fn from_str_unchecked(str: &str) -> Self {
         // SAFETY len() is up to the caller
         unsafe { Self::from_utf8_unchecked(str.as_bytes()) }
-    }
-
-    #[doc(hidden)]
-    #[inline]
-    pub const fn _from_macro(str: &str) -> Self {
-        if Self::fits(str.len()) {
-            // SAFETY checked the length and got UTF-8
-            unsafe { Self::from_str_unchecked(str) }
-        } else if Self::FIXED {
-            panic!("stringlet!(...): parameter too short or too long.")
-        } else if Self::TRIM {
-            panic!("stringlet!(trim ...): parameter too short or too long.")
-        } else {
-            panic!("stringlet!(var|slim ...): parameter too long.")
-        }
     }
 
     pub fn from_utf8_bytes(str: [u8; SIZE]) -> Result<Self, core::str::Utf8Error> {
@@ -66,6 +65,21 @@ where
         Ok(unsafe { Self::from_utf8_unchecked(bytes) })
     }
 
+    #[doc(hidden)]
+    #[inline]
+    pub const fn _from_macro(str: &str) -> Self {
+        if Self::fits(str.len()) {
+            // SAFETY checked the length and got UTF-8
+            unsafe { Self::from_utf8_unchecked(str.as_bytes()) }
+        } else if Self::FIXED {
+            panic!("stringlet!(...): parameter too short or too long.")
+        } else if Self::TRIM {
+            panic!("stringlet!(trim ...): parameter too short or too long.")
+        } else {
+            panic!("stringlet!(var|slim ...): parameter too long.")
+        }
+    }
+
     /// # Safety
     /// It is the callers responsibility to ensure that the size fits and the content is UTF-8.
     pub const unsafe fn from_utf8_unchecked(bytes: &[u8]) -> Self {
@@ -88,78 +102,26 @@ where
             _kind: PhantomData,
         }
     }
-}
 
-macro_rules! new {
-    ($kind:ident [$($gen:tt)*] $size:tt, $len:literal) => {
-        impl<$($gen)*> StringletBase<$kind, $size, $len>
-        where
-            Self: ConfigBase<$kind, $size, $len>,
-        {
-            pub const fn new() -> Self {
-                // SAFETY always short enough and no bytes that can have a UTF-8 error
-                unsafe { Self::from_utf8_unchecked(&[]) }
-            }
+    #[inline(always)]
+    pub(crate) const fn fits(len: usize) -> bool {
+        if Self::FIXED {
+            len == SIZE
+        } else if Self::TRIM {
+            len == SIZE || len + 1 == SIZE
+        } else {
+            len <= SIZE
         }
-
-        impl<$($gen)*> Default for StringletBase<$kind, $size, $len>
-        where
-            Self: ConfigBase<$kind, $size, $len>,
-        {
-            fn default() -> Self {
-                Self::new()
-            }
-        }
-    };
-}
-
-new! { Fixed [] 0, 0 }
-new! { Trim [] 0, 0 }
-new! { Trim [] 1, 0 }
-new! { Var [const SIZE: usize,] SIZE, 1 }
-new! { Slim [const SIZE: usize,] SIZE, 0 }
-
-// These are twice 3x identical but for different generic constellations.
-// A fixed Stringlet can only be empty for SIZE 0.
-/* impl<const ALIGN: u8> StringletBase<Fixed, 0, 0, ALIGN>
-where
-    Self: ConfigBase<Fixed, 0, 0, ALIGN>,
-{
-    pub const fn new() -> Self {
-        // SAFETY always short enough and no bytes that can have a UTF-8 error
-        unsafe { Self::from_utf8_unchecked(&[]) }
     }
 }
 
-impl<const ALIGN: u8> Default for StringletBase<Fixed, 0, 0, ALIGN>
-where
-    Self: ConfigBase<Fixed, 0, 0, ALIGN>,
-{
+impl_for! {
+    bound Default:
+
     fn default() -> Self {
         Self::new()
     }
 }
-
-// A variable Stringlet, slim or not, can always be empty.
-impl<const SIZE: usize, const LEN: usize, const ALIGN: u8> StringletBase<SIZE, false, LEN, ALIGN>
-where
-    Self: ConfigBase<SIZE, false, LEN, ALIGN>,
-{
-    pub const fn new() -> Self {
-        // SAFETY always short enough and no bytes that can have a UTF-8 error
-        unsafe { Self::from_utf8_unchecked(&[]) }
-    }
-}
-
-impl<const SIZE: usize, const LEN: usize, const ALIGN: u8> Default
-    for StringletBase<SIZE, false, LEN, ALIGN>
-where
-    Self: ConfigBase<SIZE, false, LEN, ALIGN>,
-{
-    fn default() -> Self {
-        Self::new()
-    }
-} */
 
 #[cfg(doctest)]
 mod doctests {
@@ -225,8 +187,41 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_fits() {
+        assert!(Stringlet::<0>::fits(0));
+        assert!(!Stringlet::<0>::fits(1));
+        assert!(Stringlet::<1>::fits(1));
+        assert!(!Stringlet::<1>::fits(0));
+        assert!(Stringlet::<256>::fits(256));
+
+        assert!(VarStringlet::<0>::fits(0));
+        assert!(!VarStringlet::<0>::fits(1));
+        assert!(VarStringlet::<1>::fits(1));
+        assert!(VarStringlet::<1>::fits(0));
+        assert!(VarStringlet::<2>::fits(0));
+        assert!(VarStringlet::<255>::fits(0));
+        assert!(VarStringlet::<255>::fits(255));
+
+        assert!(TrimStringlet::<0>::fits(0));
+        assert!(!TrimStringlet::<0>::fits(1));
+        assert!(TrimStringlet::<1>::fits(0));
+        assert!(TrimStringlet::<1>::fits(1));
+        assert!(!TrimStringlet::<2>::fits(0));
+        assert!(TrimStringlet::<256>::fits(255));
+        assert!(TrimStringlet::<256>::fits(256));
+
+        assert!(SlimStringlet::<0>::fits(0));
+        assert!(!SlimStringlet::<0>::fits(1));
+        assert!(SlimStringlet::<1>::fits(1));
+        assert!(SlimStringlet::<1>::fits(0));
+        assert!(SlimStringlet::<2>::fits(0));
+        assert!(SlimStringlet::<64>::fits(0));
+        assert!(SlimStringlet::<64>::fits(64));
+    }
+
+    #[test]
     fn test_new() {
-        let s = Stringlet::new();
+        let s = Stringlet::<0>::new();
         assert!(s.is_empty());
         let s = TrimStringlet::<0>::new();
         assert!(s.is_empty());

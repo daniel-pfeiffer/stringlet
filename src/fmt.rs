@@ -1,4 +1,4 @@
-//! `Display` and `Debug` for Stringlet
+//! `Display` and `Debug` for stringlet
 
 use crate::*;
 

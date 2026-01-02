@@ -33,25 +33,41 @@ macro_rules! stringlet_base {
 }
 
 /**
-Turn a const `str` expression into the smallest `Stringlet` that can contain it.
-Shorthand to optionally give generic parameters `SIZE` and `Self::FIXED`. For now,
-please check `README.md`.
+Turn a `str` expression into the smallest `Stringlet` that can contain it.
+Or turn `[str]` into an array of the smallest `Stringlet` that can contain them.
+You can explicitly ask for other kinds of stringlet. By default `SIZE` is the
+length of the 1st `str` parameter, in which case that parameter must be `const`.
+You can also give the size explicitly, or have it inferred from context along
+with the kind.
+
+The optional configuration is kind and/or size followed by a colon, if present:
+
+|Specification |Type |
+|:---|:---|
+|SIZE: |`Stringlet<SIZE>`|
+|var:<br>v: |`VarStringlet<param.len()>`|
+|var SIZE:<br>v SIZE: |`VarStringlet<SIZE>`|
+|trim:<br>t: |`TrimStringlet<param.len()>`|
+|trim SIZE:<br>t SIZE: |`TrimStringlet<SIZE>`|
+|slim:<br>a: |`SlimStringlet<param.len()>`|
+|slim SIZE:<br>s SIZE: |`SlimStringlet<SIZE>`|
+|_: |`StringletBase<_, _, _>`|
 
 These are equivalent:
 ```
 # use crate::stringlet::{Stringlet, stringlet};
 let s1 = stringlet!("abc");
 let s2: Stringlet<3> = stringlet!("abc");
-let s3 = stringlet!(" abc ".trim_ascii());
+let s3 = stringlet!(3: " abc ".trim_ascii());
 assert_eq!(s1, s2);
 assert_eq!(s2, s3);
 ```
 As are these:
 ```
-# use crate::stringlet::{Stringlet, stringlet};
-let s1 = stringlet!("abcdefghijklmno");
-let s2: Stringlet<15> = stringlet!("abcdefghijklmno");
-let s3 = stringlet!(concat!("abcdefgh", 'i', "jklmno"));
+# use crate::stringlet::{VarStringlet, stringlet};
+let s1 = stringlet!(var: ["abcdefghijklmno", "xyz"]);
+let s2: [VarStringlet<15>; 2] = stringlet!(_: [&String::from("abcdefghijklmno"), "xyz"]);
+let s3 = stringlet!(v 15: [concat!("abcdefgh", 'i', "jklmno"), "xyz"]);
 assert_eq!(s1, s2);
 assert_eq!(s2, s3);
 ```

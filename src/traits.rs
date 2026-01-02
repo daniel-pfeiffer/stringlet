@@ -1,4 +1,4 @@
-//! Many implementations to make Stringlet easy to use.
+//! Many implementations to make stringlet easy to use.
 
 use crate::*;
 
@@ -9,7 +9,7 @@ use core::{
 };
 
 impl_for! {
-    From<String>:
+    bound From<String>:
 
     fn from(str: String) -> Self {
         Self::from(str.as_str())
@@ -17,7 +17,7 @@ impl_for! {
 }
 
 impl_for! {
-    From<&str>:
+    bound From<&str>:
 
     fn from(str: &str) -> Self {
         assert!(
@@ -32,7 +32,7 @@ impl_for! {
 }
 
 impl_for! {
-    FromStr:
+    bound FromStr:
 
     type Err = Infallible;
 
