@@ -2,28 +2,7 @@
 
 use crate::*;
 
-macro_rules! consts {
-    ($($fn:ident -> $const:ident);+ $(;)?) => {
-        $(
-            #[allow(unused)]
-            pub(crate) const $const: bool =
-                Kind::ABBR == stringify!($const).as_bytes()[0];
-            #[allow(unused)]
-            pub(crate) const fn $fn(&self) -> bool {
-                Self::$const
-            }
-        )+
-    };
-}
-
-impl<Kind: StringletKind, const SIZE: usize, const LEN: usize> StringletBase<Kind, SIZE, LEN> {
-    consts! {
-        is_fixed -> FIXED;
-        is_trim -> TRIM;
-        is_var -> VAR;
-        is_slim -> SLIM;
-    }
-
+impl<Kind: StringletKind, const SIZE: usize> StringletBase<Kind, SIZE> {
     /* Once we add appending
     pub const fn capacity(&self) -> usize {
         SIZE
@@ -31,19 +10,19 @@ impl<Kind: StringletKind, const SIZE: usize, const LEN: usize> StringletBase<Kin
 
     #[inline(always)]
     pub const fn len(&self) -> usize {
-        // optimizer should elide all but one if-branch
-        if Self::FIXED || SIZE == 0 {
+        // optimizer should elide all but one if-branch as all conditions are const
+        if Kind::FIXED || SIZE == 0 {
             return SIZE;
-        } else if Self::VAR {
-            // For VarStringlet look no further
-            return self.len[0] as _;
         }
 
         let last = self.last();
-        if SIZE == 1 {
+        if Kind::VAR {
+            // For VarStringlet look no further
+            last as _
+        } else if SIZE == 1 {
             // iff single byte is untagged we have 1
             (last < TAG) as _
-        } else if Self::TRIM {
+        } else if Kind::TRIM {
             // branchless: if last is tagged, subtract one
             SIZE - (last > TAG) as usize
         }
@@ -65,13 +44,13 @@ impl<Kind: StringletKind, const SIZE: usize, const LEN: usize> StringletBase<Kin
         }
 
         let last = self.last();
-        if Self::FIXED {
-            // and already checked SIZE > 0
+        if Kind::FIXED {
+            // already checked SIZE > 0
             false
-        } else if Self::TRIM {
+        } else if Kind::TRIM {
             SIZE == 1 && last > TAG
-        } else if Self::VAR {
-            self.len[0] == 0
+        } else if Kind::VAR {
+            last == 0
         }
         // Only SlimStringlet after here
         else if SIZE == 64 {
@@ -84,7 +63,7 @@ impl<Kind: StringletKind, const SIZE: usize, const LEN: usize> StringletBase<Kin
 
     #[inline(always)]
     pub const fn as_bytes(&self) -> &[u8] {
-        if Self::FIXED {
+        if Kind::FIXED {
             &self.str
         } else {
             // const equivalent of [..self.len()], asm differs in debug but same as slice in release
@@ -105,25 +84,29 @@ impl<Kind: StringletKind, const SIZE: usize, const LEN: usize> StringletBase<Kin
         // todo longest: TrimStringlet<usize::MAX> -> VarStringlet<35>
         use core::fmt::Write;
         let mut ret = String::with_capacity(20) // mostly enough
-            + if Self::FIXED {
+            + if Kind::FIXED {
                 "Stringlet"
-            } else if Self::VAR {
+            } else if Kind::VAR {
                 "VarStringlet"
-            } else if Self::TRIM {
+            } else if Kind::TRIM {
                 "TrimStringlet"
             } else {
                 "SlimStringlet"
             };
         if SIZE != 16 {
-            _ = write!(ret, "<{}>", SIZE);
+            _ = write!(ret, "<{SIZE}>");
         }
         ret
     }
 
     #[inline(always)]
     pub(crate) const fn last(&self) -> u8 {
-        debug_assert!(SIZE != 0, "unchecked call");
-        self.str[SIZE - 1]
+        if Kind::VAR {
+            self.var_last()
+        } else {
+            debug_assert!(SIZE != 0, "unchecked call");
+            self.str[SIZE - 1]
+        }
     }
 }
 
@@ -148,15 +131,6 @@ mod tests {
         assert_eq!(v.as_str(), "A123456");
         let s: SlimStringlet = "A123456".into();
         assert_eq!(s.as_str(), "A123456");
-    }
-
-    #[test]
-    fn test_const() {
-        const ABCD: Stringlet<4> =
-            unsafe { Stringlet::<_>::from_utf8_bytes_unchecked([b'A', b'b', b'c', b'd']) };
-        assert_eq!(&ABCD, "Abcd");
-        const A123456: Stringlet<7> = stringlet!("A123456");
-        assert_eq!(&A123456, "A123456");
     }
 
     fn test_all_lengths<const SIZE: usize>()

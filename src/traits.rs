@@ -3,13 +3,13 @@
 use crate::*;
 
 use core::{
-    convert::Infallible,
     hash::{Hash, Hasher},
     str::FromStr,
 };
 
+// todo error handling and TryFrom instead
 impl_for! {
-    bound From<String>:
+    From<String>:
 
     fn from(str: String) -> Self {
         Self::from(str.as_str())
@@ -17,27 +17,32 @@ impl_for! {
 }
 
 impl_for! {
-    bound From<&str>:
+    FromStr:
 
-    fn from(str: &str) -> Self {
-        assert!(
-            Self::fits(str.len()),
-            "{}::from(): cannot store {} characters",
-            Self::type_name(),
-            str.len()
-        );
-        // SAFETY we checked the length and str is UTF-8
-        unsafe { Self::from_utf8_unchecked(str.as_bytes()) }
+    type Err = ();
+
+    fn from_str(str: &str) -> Result<Self, Self::Err> {
+        //println!("from_str");
+        Ok(Self::from(str))
+        /*if Self::fits(str.len()) {
+            // SAFETY we checked the length
+            Ok(unsafe { Self::from_str_unchecked(str) })
+        } else {
+            Err(())
+        }*/
     }
 }
 
 impl_for! {
-    bound FromStr:
+    From<&str>:
 
-    type Err = Infallible;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self::from(s))
+    fn from(str: &str) -> Self {
+        //println!("from");
+    // todo why doesn’t this find the previous method, instead needing it to be cloned in new.rs?
+        Self::from_str(str).unwrap_or_else(|_| panic!("{}::from(): cannot store {} characters",
+            Self::type_name(),
+            str.len()
+        ))
     }
 }
 

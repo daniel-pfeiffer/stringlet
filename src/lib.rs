@@ -13,6 +13,7 @@ mod methods;
 mod new;
 mod refs;
 mod traits;
+mod workaround;
 
 /**
 Magic sauce for a UTF-8 hack: a byte containing two high bits is not a valid last byte.
@@ -22,13 +23,15 @@ the length of the unused tail. At full length there is no tagged last byte, so w
 
 To enable simple eq-test, always put the same value on all unused bytes! Counting from the end, i.e.
 the length of the unused tail, makes the branchless implementation of `len()` more efficient.
-
-If you change the semantics, `option_env!("STRINGLET_RAW_DEBUG")` is your friend.
 */
 pub(crate) const TAG: u8 = 0b11_000000;
 
 pub trait StringletKind {
-    const ABBR: u8;
+    const FIXED: bool = false;
+    const TRIM: bool = false;
+    const VAR: bool = false;
+    const SLIM: bool = false;
+    type ExtraLen: Copy + Clone;
 }
 
 /// Configure constructors of `StringletBase` to have only valid generic parameters.
@@ -39,7 +42,7 @@ pub trait StringletKind {
     note = "`SlimStringlet` cannot be longer than 64 bytes. Consider using `VarStringlet`!"
 )]
 #[doc(hidden)]
-pub trait ConfigBase<Kind, const SIZE: usize = 16, const LEN: usize = 0> {}
+pub trait ConfigBase<Kind, const SIZE: usize = 16> {}
 
 impl<const SIZE: usize> ConfigBase<Fixed, SIZE> for Stringlet<SIZE> {}
 
@@ -50,7 +53,7 @@ impl<const SIZE: usize> ConfigBase<Fixed, SIZE> for Stringlet<SIZE> {}
 )]
 pub trait VarConfig<const SIZE: usize> {}
 // VarConfig implemented by macro below
-impl<const SIZE: usize> ConfigBase<Var, SIZE, 1> for VarStringlet<SIZE> where Self: VarConfig<SIZE> {}
+impl<const SIZE: usize> ConfigBase<Var, SIZE> for VarStringlet<SIZE> where Self: VarConfig<SIZE> {}
 
 impl<const SIZE: usize> ConfigBase<Trim, SIZE> for TrimStringlet<SIZE> {}
 
@@ -93,18 +96,19 @@ macro_rules! config {
             249 250 251 252 253 254 255
         ];
     };
-    ($msg1:literal $msg2:literal $stringlet:ident $kind:ident $len:literal $($kind_config:ident $size:tt)?) => {
+    ($msg1:literal $msg2:literal $stringlet:ident $kind:ident $const:ident $extra_len:tt $($kind_config:ident $size:tt)?) => {
         #[derive(Copy, Clone)]
         pub enum $kind {}
 
         impl StringletKind for $kind {
-            const ABBR: u8 = stringify!($kind).as_bytes()[0];
+            const $const: bool = true;
+            type ExtraLen = $extra_len;
         }
 
         #[doc = concat!($msg1, " length kind of stringlet", $msg2)]
         $(#[doc = concat!("\n\nWhen instatiating this with a generic `SIZE`, you need to add this bound:\n```ignore\nwhere ",
             stringify!($stringlet), "<SIZE>: ", stringify!($kind_config), "<SIZE>\n```")])?
-        pub type $stringlet<const SIZE: usize = 16> = StringletBase<$kind, SIZE, $len>;
+        pub type $stringlet<const SIZE: usize = 16> = StringletBase<$kind, SIZE>;
         $(config![@ $stringlet $kind_config $size];)?
     };
 }
@@ -112,25 +116,25 @@ macro_rules! config {
 config!("Fixed" ", i.e. bounds for array access are compiled in, hence it is fast.
 
 This is also produced by [`stringlet!(…)`](stringlet!()) without a kind specifier."
-    Stringlet Fixed 0);
+    Stringlet Fixed FIXED ());
 config!("Variable" ", with one extra byte for the length.
     Speed differs for some content processing, where SIMD gives an advantage for multiples of some power of 2, e.g.
     `VarStringlet<32>`. While for copying the advantage can be at one less, e.g. `VarStringlet<31>`. Size must be `0..=255`.
 
 This is also produced by [`stringlet!(…)`](stringlet!()) with a kind specifier of `var` or `v`."
-    VarStringlet Var 1 VarConfig 255);
+    VarStringlet Var VAR u8 VarConfig 255);
 config!("Trimmed" ", which optionally trims one last byte, useful for codes
     with minimal length variation like [ISO 639](https://www.iso.org/iso-639-language-code). This is achieved by tagging
     an unused last byte with a UTF-8 niche. The length gets calculated branchlessly with very few ops.
 
 This is also produced by [`stringlet!(…)`](stringlet!()) with a kind specifier of `trim` or `t`."
-    TrimStringlet Trim 0);
+    TrimStringlet Trim TRIM ());
 config!("Slim variable" ", uses a UTF-8 niche: It projects the length into 6 bits of the last byte, when content is less
     than full size. Length must be `0..=64`. Though it is done branchlessly, there are a few more ops for length calculation.
     Hence this is the slowest, albeit by a small margin.
 
 This is also produced by [`stringlet!(…)`](stringlet!()) with a kind specifier of `slim` or `s`."
-    SlimStringlet Slim 0 SlimConfig 64);
+    SlimStringlet Slim SLIM () SlimConfig 64);
 
 /** An inline String of varying size bounds, which can be handled like a primitive type.
 This is the underlying type, which you would not use directly. Instead use one of:
@@ -164,27 +168,15 @@ where
 }
 ```
 */
+// Workaround for [u8; SIZE + Kind::EXTRA_LEN], as long as “generic parameters may not be used in const operations”
+// Adapted from CAD97 https://internals.rust-lang.org/t/what-s-where-size-kind-extra/23987/9
+#[repr(C)]
 #[derive(Copy, Clone)]
-pub struct StringletBase<
-    Kind: StringletKind,
-    const SIZE: usize,
-    // Have to make LEN explicit, as we can’t pick up a const from StringletKind.
-    // We could put the whole [u8; LEN] into an associated type, but then it would be opaque to us.
-    const LEN: usize = 0,
-> {
+pub struct StringletBase<Kind: StringletKind, const SIZE: usize> {
     /// The actual payload – if it is shorter than SIZE, its last bytes will be tagged.
     pub(crate) str: [u8; SIZE],
-    /// Limited by available constructors to either 0 or 1 byte for an explicit length.
-    // str can’t be SIZE + LEN, as “generic parameters may not be used in const operations”
-    pub(crate) len: [u8; LEN],
+    pub(crate) extra_len: Kind::ExtraLen,
     pub(crate) _kind: PhantomData<Kind>,
-}
-
-/// A 2<sup>nd</sup> generic StringletBase
-macro_rules! self2 {
-    () => {
-        StringletBase<Kind2, SIZE2, LEN2>
-    };
 }
 
 /** Impl `SomeTrait` for `Self`, hiding repeated boilerplate caused by lack of nested impls.
@@ -199,45 +191,28 @@ macro_rules! impl_for {
     // Split this rule, otherwise compiler says optional <…> is ambiguous
     // $two should match nothing, but marks that 2 was matched.
     (<$($lt:lifetime)? $(,)? $(2 $($two:literal)?)?> $trait:ty $(: $($rest:tt)+)?) => {
-        impl_for!(@ $(2 $($two)?)? $($lt)?; $trait: $($($rest)+)?);
-    };
-    (bound $trait:ty: $($rest:tt)+) => {
-        impl<Kind: StringletKind, const SIZE: usize, const LEN: usize> $trait
-        for StringletBase<Kind, SIZE, LEN>
-        where Self: ConfigBase<Kind, SIZE, LEN>
-        {
-            $($rest)*
-        }
+        impl_for!(@ $(2 $($two)?)? $($lt)? [] $trait: $($($rest)+)?);
     };
     ($trait:ty $(: $($rest:tt)+)?) => {
-        impl_for!(@ ; $trait: $($($rest)+)?);
+        impl_for!(@ [] $trait: $($($rest)+)?);
     };
 
-    (@ $(2 $($two:literal)?)? $($lt:lifetime)?; $trait:ty: $($rest:tt)*) => {
-        impl_for!(@@
-            $(2 $($two)?)?
-            $($lt)?
-            [Kind: StringletKind, const SIZE: usize, const LEN: usize,]
-            $trait:
-            $($rest)*
-        );
-    };
-    (@@ 2 $($lt:lifetime)? [$($gen:tt)+] $trait:ty: $($rest:tt)*) => {
-        impl_for!(@@
-            $($lt)?
-            [$($gen)+ Kind2: StringletKind, const SIZE2: usize, const LEN2: usize]
-            $trait:
-            $($rest)*
-        );
-    };
-    (@@ $($lt:lifetime)? [$($gen:tt)+] $trait:ty: $($rest:tt)*) => {
-        impl<$($lt,)? $($gen)+> $trait
-        for StringletBase<Kind, SIZE, LEN>
+    (@ $($lt:lifetime)? [$($gen:tt)*] $trait:ty: $($rest:tt)*) => {
+        impl<$($lt,)? Kind: StringletKind, const SIZE: usize, $($gen)*> $trait
+        for StringletBase<Kind, SIZE>
+        where Self: ConfigBase<Kind, SIZE>
         {
             $($rest)*
         }
+    };
+    (@ 2 $($lt:lifetime)? [] $trait:ty: $($rest:tt)*) => {
+        impl_for!(@
+            $($lt)?
+            [Kind2: StringletKind, const SIZE2: usize]
+            $trait:
+            $($rest)*
+        );
     };
 }
 
 pub(crate) use impl_for;
-pub(crate) use self2;

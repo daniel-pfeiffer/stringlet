@@ -4,6 +4,13 @@ use crate::*;
 
 use core::cmp::Ordering;
 
+/// A 2<sup>nd</sup> generic `StringletBase`.
+macro_rules! self2 {
+    () => {
+        StringletBase<Kind2, SIZE2>
+    };
+}
+
 // Needed where explicitly requested, e.g. HashMap key
 impl_for! { Eq }
 
@@ -12,31 +19,38 @@ impl_for! {
 
     #[inline]
     fn eq(&self, other: &self2!()) -> bool {
-        // Successively eliminate cases that can be excluded at compile time, based on sizes and kinds.
-        // All kinds get filled up with the same tagged value, so often no need to calculate len.
-        // This favors comparing full arrays, hopefully by SIMD, rather than calculating the slices.
-        match (SIZE == SIZE2, Self::FIXED, other.is_fixed(), Self::TRIM, other.is_trim()) {
-            // Slice only needed because the compiler can’t reason about these types being same.
-            // Would need specialization, with either both being SIZE or SIZE != SIZE2.
-            (true, ..) => SIZE == 0 || self.str == other.str[..],
+        /// Workaround for neither being able to `type Self2 = …<…>` nor to make this expr a const.
+        macro_rules! low {
+            ($t:ty, $size:ident) => {
+                $size.saturating_sub(if <$t>::TRIM { 1 } else if <$t>::SLIM { 64 } else { 256 })
+            };
+        }
 
-            // Else fixeds can not be same.
-            (_, true, true, ..) => false,
-
-            // Else either fixed can only be eq to trim if shorter by 1; and it doesn’t need a dynamic slice
-            (_, true, _, _, true) => SIZE < SIZE2 && SIZE + 1 == SIZE2 && self.str == other.as_bytes(),
-            (_, _, true, true, _) => SIZE > SIZE2 && SIZE == SIZE2 + 1 && self.as_bytes() == other.str,
-
-            // Else either fixed can only be eq if shorter; and it doesn’t need a dynamic slice
-            (_, true, ..) => SIZE < SIZE2 && self.str == other.as_bytes(),
-            (_, _, true, ..) => SIZE > SIZE2 && self.as_bytes() == other.str,
-
-            // Else either trim can only be eq if shorter or longer by 1
-            (.., true, _) => (SIZE < SIZE2 || SIZE == SIZE2 + 1) && self.as_bytes() == other.as_bytes(),
-            (.., true) => (SIZE > SIZE2 || SIZE + 1 == SIZE2) && self.as_bytes() == other.as_bytes(),
-
-            // Else must do full cmp with dynamic lengths
-            _ => self.as_bytes() == other.as_bytes(),
+        if SIZE == 0 {
+            other.is_empty()
+        } else if SIZE2 == 0 {
+            self.is_empty()
+        } else if SIZE == SIZE2 && Kind::VAR == Kind2::VAR {
+            if Kind::VAR {
+                // Compare raw bytes, including the padding and len byte.
+                self.as_slice() == other.as_slice()
+            } else {
+                // TRIM’s and SLIM’s padding make this valid, also against FIXED.
+                self.str == other.str[..]
+            }
+        } else if Kind::FIXED {
+            // Size differs, so both fixed can’t be same. Can only be same if SIZE falls within other’s range.
+            !Kind2::FIXED &&
+                low!(Kind2, SIZE2) <= SIZE && SIZE <= SIZE2 &&
+                self.str == other.str[..other.len()]
+        } else if Kind2::FIXED {
+            // Can only be same if other’s SIZE falls within self’s range.
+            low!(Kind, SIZE) <= SIZE2 && SIZE2 <= SIZE &&
+                other.str == self.str[..self.len()]
+        } else {
+            // Can only be same if both len()..SIZE ranges overlap.
+            low!(Kind2, SIZE2) <= SIZE && low!(Kind, SIZE) <= SIZE2 &&
+                self.str[..self.len()] == other.str[..other.len()]
         }
     }
 }
@@ -57,7 +71,7 @@ impl_for! {
     fn eq(&self, other: &str) -> bool {
         if SIZE == 0 {
             other.is_empty()
-        } else if Self::FIXED {
+        } else if Kind::FIXED {
             self.str == other.as_bytes()
         } else {
             self.as_bytes() == other.as_bytes()
@@ -83,38 +97,19 @@ impl_for! {
     }
 }
 
-// Gnats: Ord falls short of PartialEq, in that I can only compare to Self
-/* impl_for! {
-    Ord:
-
-    fn cmp(&self, other: &Self) -> Ordering {
-        if Self::FIXED {
-            self.str.cmp(&other.str)
-        } else {
-            self.str[..self.len()].cmp(&other.str[..other.len()])
-        }
-    }
-}
-
-// Why can’t this be derived from Ord?
-impl_for! {
-    PartialOrd:
-
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-} */
-
 impl_for! {
     <2> PartialOrd<self2!()>:
 
-    // This is less optimised than eq, as the filler after len is greater than valid characters.
+    // This is less optimised than eq, as the filler after len can’t be less than valid characters.
     fn partial_cmp(&self, other: &self2!()) -> Option<Ordering> {
-        Some(if Self::FIXED && other.is_fixed() {
-            self.str[..].cmp(&other.str[..])
-        } else if Self::FIXED {
-            self.str[..].cmp(other.as_bytes())
-        } else if other.is_fixed() {
+        Some(if SIZE == 0 {
+            if other.is_empty() { Ordering::Equal } else { Ordering::Less }
+        } else if SIZE2 == 0 {
+            if self.is_empty() { Ordering::Equal } else { Ordering::Greater }
+        } else if Kind::FIXED {
+            self.str[..]
+                .cmp(if Kind2::FIXED { &other.str[..] } else { other.as_bytes() })
+        } else if Kind2::FIXED {
             self.as_bytes().cmp(&other.str[..])
         } else {
             self.as_bytes().cmp(other.as_bytes())
@@ -135,10 +130,11 @@ impl_for! {
 
     #[inline]
     fn partial_cmp(&self, other: &str) -> Option<Ordering> {
-        if Self::FIXED {
-            self.str[..].partial_cmp(other.as_bytes())
+        if SIZE == 0 {
+            Some(if other.is_empty() { Ordering::Equal } else { Ordering::Less })
         } else {
-            self.as_bytes().partial_cmp(other.as_bytes())
+            if Kind::FIXED { &self.str[..] } else { self.as_bytes() }
+                .partial_cmp(other.as_bytes())
         }
     }
 }

@@ -18,7 +18,7 @@ four flavors of mostly the same code. They differ in length handling, which show
   for array access are compiled in, hence fast.
 
 - **[`VarStringlet`](https://docs.rs/stringlet/latest/stringlet/type.VarStringlet.html), `stringlet!(var …)`,
-  `stringlet!(v …)`**: This adds one byte for the length – still pretty fast. Speed differs for some content processing,
+  `stringlet!(v …)`**: This adds one byte for the length – still pretty fast.  Speed differs for some content processing,
   where SIMD gives an advantage for multiples of some power of 2, e.g.  `VarStringlet<32>`. While for copying the
   advantage can be at one less, e.g. `VarStringlet<31>`. Length must be `0..=255`.
 
@@ -40,6 +40,15 @@ match the faster fixed size `Stringlet`. That would be given by
 [`fixedstr::zstr`](https://docs.rs/fixedstr/latest/fixedstr/struct.zstr.html) but their equality checks are not
 optimized. I hope it can be independently confirmed (or debunked, if I mismeasured) that for tasks like `== Self` or `==
 &str` all variants in this crate seem by a factor faster than competitors.
+
+> *Equality is fast, as it prefers testing the full arrays, as far as possible. Hard coding that beats determining the
+> length and adapting the check at run time. This can mean checking too much, but that’s ok, as per the name this crate
+> is for shorter strings. It works because, because shorter stringlets are padded such that they can only match the same
+> padding.*
+
+> *Sadly this shortcut isn’t possible for comparison of non-fixed stringlets: a size 2* `"a"`*, even if NUL padded, would
+> be indistinguishable from valid string* `"a\0"`*, without also checking the length. And that can’t be done branchlessly.
+> So in many cases we must compare dynamic slices.*
 
 ```rust
 # extern crate stringlet;
@@ -91,6 +100,8 @@ stored length. I only need to understand how to tell the compiler?
 that’s all there is to it. However when forwarding generic arguments to them you too have to bound by
 `VarConfig<SIZE>` or `SlimConfig<SIZE>`. I wish I could just hide it all behind `<const SIZE: usize<0..=64>>`!
 
+Summarized nicely on [DeepWiki](https://deepwiki.com/daniel-pfeiffer/stringlet).
+
 ## Todo
 
 - [ ] `StringletError` & `stringlet::Result`
@@ -120,6 +131,8 @@ that’s all there is to it. However when forwarding generic arguments to them y
 - [ ] Is there a downside to `Copy` by default?
 
 - [ ] What’s our minimal rust-version?
+
+## Digression
 
 <!-- do not format the table body! -->
 

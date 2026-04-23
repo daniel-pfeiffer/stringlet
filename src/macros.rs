@@ -57,25 +57,25 @@ These are equivalent:
 ```
 # use crate::stringlet::{Stringlet, stringlet};
 let s1 = stringlet!("abc");
-let s2: Stringlet<3> = stringlet!("abc");
-let s3 = stringlet!(3: " abc ".trim_ascii());
+let s2: Stringlet<3> = stringlet!(_: "abc");
+const S3: Stringlet<3> = stringlet!(3: " abc ".trim_ascii());
 assert_eq!(s1, s2);
-assert_eq!(s2, s3);
+assert_eq!(s2, S3);
 ```
 As are these:
 ```
 # use crate::stringlet::{VarStringlet, stringlet};
 let s1 = stringlet!(var: ["abcdefghijklmno", "xyz"]);
 let s2: [VarStringlet<15>; 2] = stringlet!(_: [&String::from("abcdefghijklmno"), "xyz"]);
-let s3 = stringlet!(v 15: [concat!("abcdefgh", 'i', "jklmno"), "xyz"]);
+const S3: [VarStringlet<15>; 2] = stringlet!(v 15: [concat!("abcdefgh", 'i', "jklmno"), "xyz"]);
 assert_eq!(s1, s2);
-assert_eq!(s2, s3);
+assert_eq!(s2, S3);
 ```
 */
 #[macro_export]
 macro_rules! stringlet {
     (_:  $($rest:tt)+) => {
-        $crate::stringlet_base!($crate::StringletBase::<_, _, _>:  $($rest)+)
+        $crate::stringlet_base!($crate::StringletBase::<_, _>:  $($rest)+)
     };
 
     (trim  $($rest:tt)+) => {

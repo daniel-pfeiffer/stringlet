@@ -19,31 +19,26 @@ impl_for! {
         if fmt.alternate() {
             write!(
                 fmt,
-                "{} {{ /* TODO adapt {{:#?}} to 4 kinds */ ",
+                "{} {{ ",
                 core::any::type_name::<Self>(),
             )?;
             let len = self.len();
-            write!(fmt, "SIZE: {}, len(): {len}, [u8]: {:?}, ", SIZE, self.str)?;
-            if option_env!("STRINGLET_RAW_DEBUG").is_none() {
-                if len < SIZE {
-                    write!(fmt, "str: [{:?}", self.as_str())?;
-                    for i in len..SIZE {
-                        write!(fmt, ", 0b11_{:06b}", self.str[i] ^ TAG)?;
-                    }
-                    write!(fmt, "]")?;
+            if len < SIZE {
+                write!(fmt, "len(): {len}, ")?;
+            }
+            write!(fmt, "[u8]: {:?}, ", self.str)?;
+            if len < SIZE {
+                write!(fmt, "str: [{:?}", self.as_str())?;
+                for i in len..SIZE-1 {
+                    write!(fmt, ", {}", self.str[i])?;
+                }
+                if Kind::SLIM || Kind::TRIM {
+                    write!(fmt, ", 0b11_{:06b}]", self.last() ^ TAG)?;
                 } else {
-                    write!(fmt, "str: {:?}", self.as_str())?;
+                    write!(fmt, ", {}]", self.last())?;
                 }
-            } else if SIZE > 0 {
-                let last = self.last();
-                if last >= TAG {
-                    write!(
-                        fmt,
-                        "last_tagged: ({}, {0:08b}; {}, {1:06b})",
-                        last,
-                        last ^ TAG
-                    )?;
-                }
+            } else {
+                write!(fmt, "str: {:?}", self.as_str())?;
             }
         } else {
             write!(
