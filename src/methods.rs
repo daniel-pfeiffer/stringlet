@@ -3,64 +3,6 @@
 use crate::*;
 
 impl<Kind: StringletKind, const SIZE: usize> StringletBase<Kind, SIZE> {
-    /* Once we add appending
-    pub const fn capacity(&self) -> usize {
-        SIZE
-    } */
-
-    #[inline(always)]
-    pub const fn len(&self) -> usize {
-        // optimizer should elide all but one if-branch as all conditions are const
-        if Kind::FIXED || SIZE == 0 {
-            return SIZE;
-        }
-
-        let last = self.last();
-        if Kind::VAR {
-            // For VarStringlet look no further
-            last as _
-        } else if SIZE == 1 {
-            // iff single byte is untagged we have 1
-            (last < TAG) as _
-        } else if Kind::TRIM {
-            // branchless: if last is tagged, subtract one
-            SIZE - (last > TAG) as usize
-        }
-        // Next two SlimStringlet
-        else if SIZE == 64 {
-            // 64 is special as we only store 6 bits, where 0b00_0000 means SIZE-0b100_0000
-            SIZE - (last == TAG) as usize * SIZE - (last > TAG) as usize * (last ^ TAG) as usize
-        } else {
-            // branchless: if last is UTF-8, SIZE, else extract tail len from low bits of last
-            SIZE - (last > TAG) as usize * (last ^ TAG) as usize
-        }
-    }
-
-    #[inline(always)]
-    pub const fn is_empty(&self) -> bool {
-        if SIZE == 0 {
-            // trivially
-            return true;
-        }
-
-        let last = self.last();
-        if Kind::FIXED {
-            // already checked SIZE > 0
-            false
-        } else if Kind::TRIM {
-            SIZE == 1 && last > TAG
-        } else if Kind::VAR {
-            last == 0
-        }
-        // Only SlimStringlet after here
-        else if SIZE == 64 {
-            // Special case as we have 65 lengths but only 6 bits.
-            last == TAG
-        } else {
-            last == TAG | SIZE as u8
-        }
-    }
-
     #[inline(always)]
     pub const fn as_bytes(&self) -> &[u8] {
         if Kind::FIXED {
@@ -79,24 +21,60 @@ impl<Kind: StringletKind, const SIZE: usize> StringletBase<Kind, SIZE> {
         unsafe { str::from_utf8_unchecked(self.as_bytes()) }
     }
 
-    /// Name for now as a String
-    pub(crate) fn type_name() -> String {
-        // todo longest: TrimStringlet<usize::MAX> -> VarStringlet<35>
-        use core::fmt::Write;
-        let mut ret = String::with_capacity(20) // mostly enough
-            + if Kind::FIXED {
-                "Stringlet"
-            } else if Kind::VAR {
-                "VarStringlet"
-            } else if Kind::TRIM {
-                "TrimStringlet"
-            } else {
-                "SlimStringlet"
-            };
-        if SIZE != 16 {
-            _ = write!(ret, "<{SIZE}>");
+    /* Once we add appending
+    pub const fn capacity(&self) -> usize {
+        SIZE
+    } */
+
+    #[inline(always)]
+    pub const fn len(&self) -> usize {
+        // optimizer should elide all but one if-branch as all conditions are const
+        if Kind::FIXED || SIZE == 0 {
+            return SIZE;
         }
-        ret
+
+        let last = self.last();
+        if Kind::VAR {
+            // For VarStringlet look no further
+            last as _
+        } else if SIZE == 1 {
+            // iff single byte is not TAG | 1 we have 1 (use +, because mutants flags ^, which in this case is identical to |)
+            (last != TAG + 1) as _
+        } else if Kind::TRIM {
+            // branchless: if last is tagged, subtract one
+            SIZE - (last == TAG + 1) as usize
+        }
+        // Next two SlimStringlet
+        else if SIZE == 64 {
+            // 64 is special as we only store 6 bits, where 0b00_0000 means SIZE-0b100_0000
+            SIZE - (last == TAG) as usize * SIZE - (last > TAG) as usize * (last ^ TAG) as usize
+        } else {
+            // branchless: if last is UTF-8, SIZE, else extract tail len from low bits of last
+            SIZE - (last > TAG) as usize * (last ^ TAG) as usize
+        }
+    }
+
+    #[inline(always)]
+    pub const fn is_empty(&self) -> bool {
+        if SIZE == 0 {
+            // trivially
+            true
+        } else if Kind::FIXED {
+            // FIXED > 0 can never be empty
+            false
+        } else if Kind::VAR {
+            self.last() == 0
+        } else if Kind::TRIM {
+            // TRIM is only empty if last is tagged
+            SIZE == 1 && self.last() == TAG + 1
+        }
+        // Next two SlimStringlet
+        else if SIZE == 64 {
+            // Special case as we have 65 lengths but only 6 bits.
+            self.last() == TAG
+        } else {
+            self.last() == TAG + SIZE as u8
+        }
     }
 
     #[inline(always)]
@@ -112,8 +90,6 @@ impl<Kind: StringletKind, const SIZE: usize> StringletBase<Kind, SIZE> {
 
 #[cfg(test)]
 mod tests {
-    use core::convert::Into;
-
     use super::*;
 
     #[test]
@@ -124,13 +100,14 @@ mod tests {
     }
 
     #[test]
-    fn test_as_str() {
-        let f: Stringlet<7> = "A123456".into();
+    fn test_as_str() -> Result<()> {
+        let f: Stringlet<7> = "A123456".try_into()?;
         assert_eq!(f.as_str(), "A123456");
-        let v: VarStringlet = "A123456".into();
+        let v: VarStringlet = "A123456".try_into()?;
         assert_eq!(v.as_str(), "A123456");
-        let s: SlimStringlet = "A123456".into();
+        let s: SlimStringlet = "A123456".try_into()?;
         assert_eq!(s.as_str(), "A123456");
+        Ok(())
     }
 
     fn test_all_lengths<const SIZE: usize>()
@@ -138,21 +115,29 @@ mod tests {
         VarStringlet<SIZE>: VarConfig<SIZE>,
         SlimStringlet<SIZE>: SlimConfig<SIZE>,
     {
-        const STR64: &str = "0123456789_123456789_123456789_123456789_123456789_123456789_123";
-        for len in 0..=SIZE {
-            let str: VarStringlet<SIZE> = (&STR64[..len]).into();
-            assert_eq!(str.is_empty(), len == 0);
-            assert_eq!(str.len(), len);
-            let str: SlimStringlet<SIZE> = (&STR64[..len]).into();
-            assert_eq!(str.is_empty(), len == 0);
-            assert_eq!(str.len(), len);
-        }
-        let fixed: Stringlet<SIZE> = (&STR64[..SIZE]).into();
+        let str64s: [&str; 3] = [
+            "0123456789_123456789_123456789_123456789_123456789_123456789_123",
+            str::from_utf8(&[0; 64]).unwrap(),
+            str::from_utf8(&[0x7f_u8; 64]).unwrap(),
+        ];
+        let fixed: Stringlet<SIZE> = (&str64s[0][..SIZE]).try_into().unwrap();
         assert_eq!(fixed.is_empty(), SIZE == 0);
         assert_eq!(fixed.len(), SIZE);
-        let trim: TrimStringlet<SIZE> = (&STR64[..SIZE]).into();
-        assert_eq!(trim.is_empty(), SIZE == 0);
-        assert_eq!(trim.len(), SIZE);
+        for len in 0..=SIZE {
+            let str: VarStringlet<SIZE> = (&str64s[0][..len]).try_into().unwrap();
+            assert_eq!(str.is_empty(), len == 0);
+            assert_eq!(str.len(), len);
+            for str64 in str64s {
+                if len >= const { SIZE.saturating_sub(1) } {
+                    let str: TrimStringlet<SIZE> = (&str64[..len]).try_into().unwrap();
+                    assert_eq!(str.is_empty(), len == 0);
+                    assert_eq!(str.len(), len);
+                }
+                let str: SlimStringlet<SIZE> = (&str64[..len]).try_into().unwrap();
+                assert_eq!(str.is_empty(), len == 0);
+                assert_eq!(str.len(), len);
+            }
+        }
     }
     #[test]
     fn test_len() {
@@ -192,31 +177,5 @@ mod tests {
         assert!(stringlet!(slim 2: "").is_empty());
         assert!(!stringlet!(slim: "a").is_empty());
         assert!(!stringlet!(slim: "ab").is_empty());
-    }
-
-    #[test]
-    fn test_all_type_names() {
-        macro_rules! test_it {
-            (1 $ty:ty) => {
-                assert_eq!(<$ty>::type_name(), stringify!($ty).replace(' ', ""));
-            };
-            ([$($size:literal),+] $ty:tt) => {
-                $(
-                    test_it!(1 $ty<$size>);
-                )+
-            };
-            ($ty:tt) => {
-                test_it!(1 $ty); // special case default 16
-                test_it!([
-                    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 22, 23,
-                    24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43,
-                    44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64
-                ] $ty);
-            };
-        }
-        test_it!(Stringlet);
-        test_it!(VarStringlet);
-        test_it!(TrimStringlet);
-        test_it!(SlimStringlet);
     }
 }

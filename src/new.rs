@@ -12,21 +12,22 @@ where
     pub const fn new() -> Self {
         const {
             if Kind::FIXED {
-                assert!(SIZE == 0, "Stringlet<1> or longer cannot be empty");
+                assert!(SIZE == 0, "Stringlet<1> or bigger cannot be empty");
             } else if Kind::TRIM {
-                assert!(SIZE <= 1, "TrimStringlet<2> or longer cannot be empty");
+                assert!(SIZE <= 1, "TrimStringlet<2> or bigger cannot be empty");
             }
         }
         // SAFETY always short enough and no bytes that can have a UTF-8 error
         unsafe { Self::from_utf8_unchecked(&[]) }
     }
 
-    pub const fn from_str(str: &str) -> Result<Self, ()> {
-        if Self::fits(str.len()) {
-            // SAFETY we checked the length
-            Ok(unsafe { Self::from_str_unchecked(str) })
-        } else {
-            Err(())
+    pub const fn from_str(str: &str) -> Result<Self> {
+        match Self::fits(str.len()) {
+            Ok(()) => {
+                // SAFETY we checked the length and got UTF-8
+                Ok(unsafe { Self::from_str_unchecked(str) })
+            }
+            Err(e) => Err(e),
         }
     }
 
@@ -40,48 +41,70 @@ where
     /**
     ```
     # use stringlet::Stringlet;
-    let abcd = unsafe { Stringlet::<4>::from_utf8_bytes([b'A', b'b', b'c', b'd']) }.unwrap();
+    let abcd = unsafe { Stringlet::<4>::from_utf8(b"Abcd") }?;
     assert_eq!(abcd, "Abcd");
+    # Ok::<(), stringlet::error::Error>(())
     ```
     */
-    pub fn from_utf8_bytes(str: [u8; SIZE]) -> Result<Self, core::str::Utf8Error> {
-        // SAFETY always short enough
-        Ok(unsafe { Self::from_str_unchecked(str::from_utf8(&str)?) })
+    pub const fn from_utf8(str: &[u8]) -> Result<Self> {
+        // const equivalent of `expr?`
+        match Self::fits(str.len()) {
+            Ok(()) => {
+                match str::from_utf8(str) {
+                    // SAFETY always short enough and no bytes have a UTF-8 error
+                    Ok(str) => Ok(unsafe { Self::from_str_unchecked(str) }),
+                    Err(e) => Err(Utf8Error(e)),
+                }
+            }
+            Err(e) => Err(e),
+        }
     }
 
     /**
     ```
     # use stringlet::Stringlet;
-    let abcd = unsafe { Stringlet::<4>::from_utf8(b"Abcd") }.unwrap();
-    assert_eq!(abcd, "Abcd");
+    const ABCD: Stringlet<4> =
+        unsafe { Stringlet::from_utf8_unchecked(b"Abcd") };
+    assert_eq!(ABCD, "Abcd");
     ```
-    */
-    pub fn from_utf8(bytes: &[u8]) -> Result<Self, core::str::Utf8Error> {
-        // todo return an Error, e.g. core::array::TryFromSliceError
-        assert!(
-            Self::fits(bytes.len()),
-            "{}::from_utf8(): cannot store {} characters",
-            Self::type_name(),
-            bytes.len()
-        );
-        //str::from_utf8(bytes)?;
-        // SAFETY we checked the length and utf8ness
-        Ok(unsafe { Self::from_str_unchecked(str::from_utf8(bytes)?) })
-        //Ok(unsafe { Self::from_utf8_unchecked(bytes) })
+    # Safety
+    It is the callers responsibility to ensure that the size fits and the content is UTF-8. */
+    pub const unsafe fn from_utf8_unchecked(str: &[u8]) -> Self {
+        let bytes_len = str.len();
+
+        /* let mut str_uninit = core::mem::MaybeUninit::uninit();
+        let str = str_uninit.as_mut_ptr() as *mut u8; */
+        let mut me_uninit = core::mem::MaybeUninit::<Self>::uninit();
+        let me = me_uninit.as_mut_ptr() as *mut u8;
+        // SAFETY we write to whole uninit via pointer methods only before Rust sees the value
+        unsafe {
+            core::ptr::copy_nonoverlapping(str.as_ptr(), me, bytes_len);
+            if Kind::VAR {
+                me.add(bytes_len).write_bytes(0, SIZE - bytes_len);
+                me.add(SIZE).write(bytes_len as _);
+            } else if !Kind::FIXED && SIZE > 0 && SIZE > bytes_len {
+                me.add(bytes_len).write_bytes(0, SIZE - bytes_len - 1);
+                let tail = TAG | (SIZE - bytes_len) as u8;
+                me.add(SIZE - 1).write(tail);
+            }
+            me_uninit.assume_init()
+        }
     }
 
-    #[doc(hidden)]
-    #[inline]
-    pub const fn _from_macro(str: &str) -> Self {
-        if Self::fits(str.len()) {
-            // SAFETY checked the length and got UTF-8
-            unsafe { Self::from_str_unchecked(str) }
-        } else if Kind::FIXED {
-            panic!("stringlet!(...): parameter too short or too long.");
-        } else if Kind::TRIM {
-            panic!("stringlet!(trim ...): parameter too short or too long.");
-        } else {
-            panic!("stringlet!(var|slim ...): parameter too long.");
+    /**
+    ```
+    # use stringlet::Stringlet;
+    let abcd = Stringlet::<4>::from_utf8_bytes([b'A', b'b', b'c', b'd'])?;
+    assert_eq!(abcd, "Abcd");
+    # Ok::<(), stringlet::error::Error>(())
+    ```
+    */
+    pub const fn from_utf8_bytes(str: [u8; SIZE]) -> Result<Self> {
+        // const equivalent of `expr?`
+        match str::from_utf8(&str) {
+            // SAFETY always short enough and no bytes have a UTF-8 error
+            Ok(str) => Ok(unsafe { Self::from_str_unchecked(str) }),
+            Err(e) => Err(Utf8Error(e)),
         }
     }
 
@@ -102,44 +125,57 @@ where
     /**
     ```
     # use stringlet::Stringlet;
-    const ABCD: Stringlet<4> =
-        unsafe { Stringlet::from_utf8_unchecked(b"Abcd") };
-    assert_eq!(ABCD, "Abcd");
+    let abcd = Stringlet::<4>::from_utf8_slice(b"Abcd")?;
+    assert_eq!(abcd, "Abcd");
+    # Ok::<(), stringlet::error::Error>(())
     ```
-    # Safety
-    It is the callers responsibility to ensure that the size fits and the content is UTF-8. */
-    pub const unsafe fn from_utf8_unchecked(bytes: &[u8]) -> Self {
-        let bytes_len = bytes.len();
-
-        /* let mut str_uninit = core::mem::MaybeUninit::uninit();
-        let str = str_uninit.as_mut_ptr() as *mut u8; */
-        let mut me_uninit = core::mem::MaybeUninit::<Self>::uninit();
-        let me = me_uninit.as_mut_ptr() as *mut u8;
-        // SAFETY we write to whole uninit via pointer methods only before Rust sees the value
-        unsafe {
-            core::ptr::copy_nonoverlapping(bytes.as_ptr(), me, bytes_len);
-            if Kind::VAR {
-                me.add(bytes_len).write_bytes(0, SIZE - bytes_len);
-                me.add(SIZE).write(bytes_len as _);
-            } else if !Kind::FIXED && SIZE > 0 && SIZE > bytes_len {
-                me.add(bytes_len).write_bytes(0, SIZE - bytes_len - 1);
-                let tail = TAG | (SIZE - bytes_len) as u8;
-                me.add(SIZE - 1).write(tail);
-            }
-            me_uninit.assume_init()
+    */
+    pub const fn from_utf8_slice(str: &[u8; SIZE]) -> Result<Self> {
+        // const equivalent of `expr?`
+        match str::from_utf8(str) {
+            // SAFETY always short enough and no slice have a UTF-8 error
+            Ok(str) => Ok(unsafe { Self::from_str_unchecked(str) }),
+            Err(e) => Err(Utf8Error(e)),
         }
     }
 
-    #[inline(always)]
-    pub(crate) const fn fits(len: usize) -> bool {
-        if Kind::FIXED {
-            len == SIZE
-        } else if Kind::VAR {
-            len <= SIZE
-        } else if Kind::TRIM {
-            len == SIZE || len + 1 == SIZE
+    /**
+    ```
+    # use stringlet::Stringlet;
+    const ABCD: Stringlet<4> =
+        unsafe { Stringlet::from_utf8_slice_unchecked(b"Abcd") };
+    assert_eq!(ABCD, "Abcd");
+    ```
+    # Safety
+    It is the callers responsibility to ensure that the content is UTF-8. */
+    pub const unsafe fn from_utf8_slice_unchecked(str: &[u8; SIZE]) -> Self {
+        // SAFETY It is the callers responsibility to ensure that the content is UTF-8.
+        unsafe { Self::from_utf8_unchecked(str) }
+    }
+
+    #[doc(hidden)]
+    #[inline]
+    pub const fn _from_macro(str: &str) -> Self {
+        match Self::fits(str.len()) {
+            // SAFETY we checked the length and got UTF-8
+            Ok(()) => unsafe { Self::from_str_unchecked(str) },
+            Err(TooLong) => panic!("stringlet!(...): parameter too long for its type."),
+            Err(TooShort) => panic!("stringlet!(...): parameter too short for its type."),
+            Err(Utf8Error(_)) => unreachable!(),
+        }
+    }
+
+    pub(crate) const fn fits(len: usize) -> Result<()> {
+        if len > SIZE {
+            Err(TooLong)
+        } else if (Kind::FIXED && len == SIZE)
+            || Kind::VAR
+            || Kind::SLIM
+            || (Kind::TRIM && len >= const { SIZE.saturating_sub(1) })
+        {
+            Ok(())
         } else {
-            SIZE.saturating_sub(64) <= len && len <= SIZE
+            Err(TooShort)
         }
     }
 }
@@ -217,35 +253,35 @@ mod tests {
 
     #[test]
     fn test_fits() {
-        assert!(Stringlet::<0>::fits(0));
-        assert!(!Stringlet::<0>::fits(1));
-        assert!(Stringlet::<1>::fits(1));
-        assert!(!Stringlet::<1>::fits(0));
-        assert!(Stringlet::<256>::fits(256));
+        assert!(Stringlet::<0>::fits(0).is_ok());
+        assert!(Stringlet::<0>::fits(1).is_err());
+        assert!(Stringlet::<1>::fits(1).is_ok());
+        assert!(Stringlet::<1>::fits(0).is_err());
+        assert!(Stringlet::<256>::fits(256).is_ok());
 
-        assert!(VarStringlet::<0>::fits(0));
-        assert!(!VarStringlet::<0>::fits(1));
-        assert!(VarStringlet::<1>::fits(1));
-        assert!(VarStringlet::<1>::fits(0));
-        assert!(VarStringlet::<2>::fits(0));
-        assert!(VarStringlet::<255>::fits(0));
-        assert!(VarStringlet::<255>::fits(255));
+        assert!(VarStringlet::<0>::fits(0).is_ok());
+        assert!(!VarStringlet::<0>::fits(1).is_ok());
+        assert!(VarStringlet::<1>::fits(1).is_ok());
+        assert!(VarStringlet::<1>::fits(0).is_ok());
+        assert!(VarStringlet::<2>::fits(0).is_ok());
+        assert!(VarStringlet::<255>::fits(0).is_ok());
+        assert!(VarStringlet::<255>::fits(255).is_ok());
 
-        assert!(TrimStringlet::<0>::fits(0));
-        assert!(!TrimStringlet::<0>::fits(1));
-        assert!(TrimStringlet::<1>::fits(0));
-        assert!(TrimStringlet::<1>::fits(1));
-        assert!(!TrimStringlet::<2>::fits(0));
-        assert!(TrimStringlet::<256>::fits(255));
-        assert!(TrimStringlet::<256>::fits(256));
+        assert!(TrimStringlet::<0>::fits(0).is_ok());
+        assert!(!TrimStringlet::<0>::fits(1).is_ok());
+        assert!(TrimStringlet::<1>::fits(0).is_ok());
+        assert!(TrimStringlet::<1>::fits(1).is_ok());
+        assert!(!TrimStringlet::<2>::fits(0).is_ok());
+        assert!(TrimStringlet::<256>::fits(255).is_ok());
+        assert!(TrimStringlet::<256>::fits(256).is_ok());
 
-        assert!(SlimStringlet::<0>::fits(0));
-        assert!(!SlimStringlet::<0>::fits(1));
-        assert!(SlimStringlet::<1>::fits(1));
-        assert!(SlimStringlet::<1>::fits(0));
-        assert!(SlimStringlet::<2>::fits(0));
-        assert!(SlimStringlet::<64>::fits(0));
-        assert!(SlimStringlet::<64>::fits(64));
+        assert!(SlimStringlet::<0>::fits(0).is_ok());
+        assert!(!SlimStringlet::<0>::fits(1).is_ok());
+        assert!(SlimStringlet::<1>::fits(1).is_ok());
+        assert!(SlimStringlet::<1>::fits(0).is_ok());
+        assert!(SlimStringlet::<2>::fits(0).is_ok());
+        assert!(SlimStringlet::<64>::fits(0).is_ok());
+        assert!(SlimStringlet::<64>::fits(64).is_ok());
     }
 
     #[test]

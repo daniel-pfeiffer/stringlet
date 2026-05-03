@@ -7,6 +7,7 @@ extern crate alloc; */
 use core::marker::PhantomData;
 
 mod cmp;
+pub mod error;
 mod fmt;
 mod macros;
 mod methods;
@@ -14,6 +15,9 @@ mod new;
 mod refs;
 mod traits;
 mod workaround;
+
+pub(crate) use error::Error::*;
+pub(crate) type Result<T> = core::result::Result<T, error::Error>;
 
 /**
 Magic sauce for a UTF-8 hack: a byte containing two high bits is not a valid last byte.
@@ -27,11 +31,12 @@ the length of the unused tail, makes the branchless implementation of `len()` mo
 pub(crate) const TAG: u8 = 0b11_000000;
 
 pub trait StringletKind {
-    const FIXED: bool = false;
-    const TRIM: bool = false;
-    const VAR: bool = false;
-    const SLIM: bool = false;
     type ExtraLen: Copy + Clone;
+    const FIXED: bool = false;
+    const VAR: bool = false;
+    const TRIM: bool = false;
+    const SLIM: bool = false;
+    const NAME: &str;
 }
 
 /// Configure constructors of `StringletBase` to have only valid generic parameters.
@@ -103,6 +108,7 @@ macro_rules! config {
         impl StringletKind for $kind {
             const $const: bool = true;
             type ExtraLen = $extra_len;
+            const NAME: &str = stringify!($stringlet);
         }
 
         #[doc = concat!($msg1, " length kind of stringlet", $msg2)]
@@ -163,8 +169,8 @@ where
     VarStringlet<SIZE>: VarConfig<SIZE>,
     SlimStringlet<SIZE>: SlimConfig<SIZE>,
 {
-    let var = VarStringlet::<SIZE>::from("var");
-    let slim: SlimStringlet<SIZE> = "slim".into();
+    let var = VarStringlet::<SIZE>::try_from("var").unwrap();
+    let slim: SlimStringlet<SIZE> = "slim".try_into().unwrap();
 }
 ```
 */

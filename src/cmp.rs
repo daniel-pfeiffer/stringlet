@@ -35,22 +35,22 @@ impl_for! {
                 // Compare raw bytes, including the padding and len byte.
                 self.as_slice() == other.as_slice()
             } else {
-                // TRIM’s and SLIM’s padding make this valid, also against FIXED.
+                // TRIM’s and SLIM’s padding make this valid, also comparing with FIXED.
                 self.str == other.str[..]
             }
         } else if Kind::FIXED {
             // Size differs, so both fixed can’t be same. Can only be same if SIZE falls within other’s range.
             !Kind2::FIXED &&
                 low!(Kind2, SIZE2) <= SIZE && SIZE <= SIZE2 &&
-                self.str == other.str[..other.len()]
+                self.str == other.as_bytes()
         } else if Kind2::FIXED {
             // Can only be same if other’s SIZE falls within self’s range.
             low!(Kind, SIZE) <= SIZE2 && SIZE2 <= SIZE &&
-                other.str == self.str[..self.len()]
+                other.str == self.as_bytes()
         } else {
             // Can only be same if both len()..SIZE ranges overlap.
             low!(Kind2, SIZE2) <= SIZE && low!(Kind, SIZE) <= SIZE2 &&
-                self.str[..self.len()] == other.str[..other.len()]
+                self.as_bytes() == other.as_bytes()
         }
     }
 }
@@ -177,12 +177,15 @@ mod tests {
                 stringlet!(s 2: ""),
                 stringlet!("x"),
                 stringlet!(v: "x"),
+                stringlet!(v 1: "\0"),
                 stringlet!(v 2: "x"),
                 stringlet!(v 3: "x"),
                 stringlet!(t: "x"),
                 stringlet!(t 2: "x"),
+                stringlet!(t 2: "\0"),
                 stringlet!(s: "x"),
                 stringlet!(s 2: "x"),
+                stringlet!(s 2: "\0"),
                 stringlet!(s 3: "x"),
                 stringlet!("y"),
                 stringlet!(v: "y"),

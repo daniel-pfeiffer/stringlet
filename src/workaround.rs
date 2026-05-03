@@ -2,7 +2,7 @@
 
 use crate::*;
 
-use core::{slice::from_raw_parts, slice::from_raw_parts_mut};
+use core::slice::from_raw_parts;
 
 impl<Kind: StringletKind, const SIZE: usize> StringletBase<Kind, SIZE> {
     #[inline]
@@ -20,13 +20,13 @@ impl<Kind: StringletKind, const SIZE: usize> StringletBase<Kind, SIZE> {
         unsafe { from_raw_parts(ptr, SIZE + size_of::<Kind::ExtraLen>()) }
     }
 
-    #[inline]
+    /* #[inline]
     pub(crate) const fn _as_slice_mut(&mut self) -> &mut [u8] {
         let ptr = self as *mut Self as *mut u8;
         unsafe { from_raw_parts_mut(ptr, SIZE + size_of::<Kind::ExtraLen>()) }
     }
 
-    /* #[inline]
+    #[inline]
     pub(crate) fn into_parts(self) -> ([u8; SIZE], [u8; B]) {
         (self.0, self.1)
     }

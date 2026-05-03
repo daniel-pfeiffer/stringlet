@@ -68,19 +68,19 @@ mod tests {
 
     #[test]
     fn test_deref() {
-        let s = Stringlet::<3>::from("Abc");
+        let s = Stringlet::<3>::try_from("Abc").unwrap();
         assert!(s.contains('b'));
-        let s = VarStringlet::<4>::from("Abc");
+        let s = VarStringlet::<4>::try_from("Abc").unwrap();
         assert!(s.contains('b'));
-        let s = TrimStringlet::<4>::from("Abc");
+        let s = TrimStringlet::<4>::try_from("Abc").unwrap();
         assert!(s.contains('b'));
-        let s = SlimStringlet::<4>::from("Abc");
+        let s = SlimStringlet::<4>::try_from("Abc").unwrap();
         assert!(s.contains('b'));
     }
 
     #[test]
     fn test_as_ref() {
-        let s = Stringlet::<1>::from("A");
+        let s = Stringlet::<1>::try_from("A").unwrap();
         let s: &str = s.as_ref();
         assert_eq!(s, "A");
     }

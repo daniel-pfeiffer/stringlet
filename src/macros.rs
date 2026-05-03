@@ -8,50 +8,82 @@ macro_rules! stringlet_base {
         $crate::stringlet_base!(size$params  $($rest)+)
     };
     (param($kind:tt)  $size:tt:  $($rest:tt)+) => {
-        $crate::stringlet_base!($crate::$kind<$size>:  $($rest)+)
+        $crate::stringlet_base!(size($kind $size)  $($rest)+)
     };
 
-    // add default size?
-    (size($kind:tt)  [$str:expr $(, $strn:expr)*]) => {
-        $crate::stringlet_base!($crate::$kind<{ ($str).len() }>: [$str $(, $strn)*])
+    // add default size or was given?
+    (size($kind:tt)  [$str:expr $(, $($rest:tt)*)?]) => {{
+        const STR: &::core::primitive::str = $str;
+        $crate::stringlet_base!([$crate::stringlet_base!(const $kind { STR.len() } STR)] $($($rest)*)?)
+    }};
+    (size($kind:tt $size:tt)  [$str:literal $(, $($rest:tt)*)?]) => {
+        $crate::stringlet_base!([$crate::stringlet_base!(const $kind $size $str)] $($($rest)*)?)
     };
+    (size($kind:tt $size:tt)  [$str:expr $(, $($rest:tt)*)?]) => {
+        $crate::stringlet_base!([$crate::stringlet_base!(dyn $kind $size $str)] $($($rest)*)?)
+    };
+
     (size($kind:tt)  $str:expr) => {
-        $crate::stringlet_base!($crate::$kind<{ ($str).len() }>:  $str)
+        const {
+            const STR: &::core::primitive::str = $str;
+            $crate::stringlet_base!(dyn $kind { STR.len() } STR)
+        }
+    };
+    (size($kind:tt $size:tt)  $str:literal) => {
+        $crate::stringlet_base!(const $kind $size $str)
     };
     (size($kind:tt $size:tt)  $str:expr) => {
-        $crate::stringlet_base!($crate::$kind<$size>:  $str)
+        $crate::stringlet_base!(dyn $kind $size $str)
     };
 
-    ($slet:ty:  [$($str:expr),+]) => {
-        [$(
-            <$slet>::_from_macro($str)
-        ),+]
+    (dyn _ _ $str:expr) => {
+        $crate::StringletBase::<_, _>::_from_macro($str)
     };
-    ($slet:ty:  $str:expr) => {
-        <$slet>::_from_macro($str)
+    (dyn $kind:tt $size:tt $str:expr) => {
+        $crate::StringletBase::<$crate::$kind, $size>::_from_macro($str)
+    };
+
+    (const $kind:tt $size:tt $str:expr) => {
+        const {
+            $crate::stringlet_base!(dyn $kind $size $str)
+        }
+    };
+
+    ([$($done:expr),*]  $str:literal $(, $($rest:tt)*)?) => {
+        $crate::stringlet_base!([$($done),*, $crate::stringlet_base!(const _ _ $str)]  $($($rest)*)?)
+    };
+    /* ([$($done:expr),*]  $($str:literal),+ $(, $($rest:tt)*)?) => {
+        $crate::stringlet_base!([$($done),*, $($crate::stringlet_base!(const _ _ $str)),+]  $($($rest)*)?)
+    }; */
+    ([$($done:expr),*]  $str:expr $(, $($rest:tt)*)?) => {
+        $crate::stringlet_base!([$($done),*, $crate::stringlet_base!(dyn _ _ $str)]  $($($rest)*)?)
+    };
+    ($array:expr) => {
+        $array
     };
 }
 
 /**
 Turn a `str` expression into the smallest `Stringlet` that can contain it.
-Or turn `[str]` into an array of the smallest `Stringlet` that can contain them.
+Or turn `[str, …]` into an array of the smallest `Stringlet` that can contain them.
 You can explicitly ask for other kinds of stringlet. By default `SIZE` is the
 length of the 1st `str` parameter, in which case that parameter must be `const`.
 You can also give the size explicitly, or have it inferred from context along
 with the kind.
 
-The optional configuration is kind and/or size followed by a colon, if present:
+The optional configuration is kind and/or size, if present followed by a colon:
 
-|Specification |Type |
-|:---|:---|
-|SIZE: |`Stringlet<SIZE>`|
-|var:<br>v: |`VarStringlet<param.len()>`|
-|var SIZE:<br>v SIZE: |`VarStringlet<SIZE>`|
-|trim:<br>t: |`TrimStringlet<param.len()>`|
-|trim SIZE:<br>t SIZE: |`TrimStringlet<SIZE>`|
-|slim:<br>a: |`SlimStringlet<param.len()>`|
-|slim SIZE:<br>s SIZE: |`SlimStringlet<SIZE>`|
-|_: |`StringletBase<_, _, _>`|
+|Long Spec \| |Short Spec \| |Type |
+|:---|:---|:---|
+| | |`Stringlet<param.len()>`|
+|SIZE: | |`Stringlet<SIZE>`|
+|var: |v: |`VarStringlet<param.len()>`|
+|var SIZE: |v SIZE: |`VarStringlet<SIZE>`|
+|trim: |t: |`TrimStringlet<param.len()>`|
+|trim SIZE: |t SIZE: |`TrimStringlet<SIZE>`|
+|slim: |s: |`SlimStringlet<param.len()>`|
+|slim SIZE: |s SIZE: |`SlimStringlet<SIZE>`|
+|_: | |`StringletBase<_, _>`|
 
 These are equivalent:
 ```
@@ -75,35 +107,35 @@ assert_eq!(s2, S3);
 #[macro_export]
 macro_rules! stringlet {
     (_:  $($rest:tt)+) => {
-        $crate::stringlet_base!($crate::StringletBase::<_, _>:  $($rest)+)
-    };
-
-    (trim  $($rest:tt)+) => {
-        $crate::stringlet_base!(param(TrimStringlet)  $($rest)+)
-    };
-    (t  $($rest:tt)+) => {
-        $crate::stringlet!(trim  $($rest)+)
+        $crate::stringlet_base!(size(_ _)  $($rest)+)
     };
 
     (var  $($rest:tt)+) => {
-        $crate::stringlet_base!(param(VarStringlet)  $($rest)+)
+        $crate::stringlet_base!(param(Var)  $($rest)+)
     };
     (v  $($rest:tt)+) => {
         $crate::stringlet!(var  $($rest)+)
     };
 
-    (slim  $($rest:tt)+) => {
-        $crate::stringlet_base!(param(SlimStringlet)  $($rest)+)
+    (trim  $($rest:tt)+) => {
+        $crate::stringlet_base!(param(Trim)  $($rest)+)
+    };
+    (t  $($rest:tt)+) => {
+        $crate::stringlet!(trim  $($rest)+)
+    };
+
+    (slim $($rest:tt)+) => {
+        $crate::stringlet_base!(param(Slim)  $($rest)+)
     };
     (s  $($rest:tt)+) => {
         $crate::stringlet!(slim  $($rest)+)
     };
 
-    ($size:tt: $($rest:tt)+) => {
-        $crate::stringlet_base!($crate::Stringlet<$size>:  $($rest)+)
+    ($size:tt:  $($rest:tt)+) => {
+        $crate::stringlet_base!(size(Fixed $size)  $($rest)+)
     };
     ($($rest:tt)+) => {
-        $crate::stringlet_base!(size(Stringlet)  $($rest)+)
+        $crate::stringlet_base!(size(Fixed)  $($rest)+)
     };
 }
 
@@ -112,6 +144,43 @@ mod doctests {
     /**
     ```compile_fail
     # use crate::stringlet::stringlet;
+        println!("FAILED should not see this");
+        let _: Stringlet<2> = stringlet!(_: ""); // 0 is too short
+    ```
+    */
+    fn test_macro_fixed_2_compile_fail() {}
+
+    /**
+    ```compile_fail
+    # use crate::stringlet::stringlet;
+        println!("FAILED should not see this");
+        let _: [Stringlet<2>; 2] = stringlet!(_: ["ok", ""]); // 0 is too short
+    ```
+    */
+    fn test_macro_fixed_array_compile_fail() {}
+
+    /**
+    ```compile_fail
+    # use crate::stringlet::stringlet;
+        println!("FAILED should not see this");
+        stringlet!(2: ""); // 0 is too short
+    ```
+    */
+    fn test_macro_fixed_2_0_compile_fail() {}
+
+    /**
+    ```compile_fail
+    # use crate::stringlet::stringlet;
+        println!("FAILED should not see this");
+        stringlet!(2: "more"); // 4 is too long
+    ```
+    */
+    fn test_macro_fixed_2_4_compile_fail() {}
+
+    /**
+    ```compile_fail
+    # use crate::stringlet::stringlet;
+        println!("FAILED should not see this");
         stringlet!(var: "0123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_12345");
     ```
     */
@@ -120,6 +189,34 @@ mod doctests {
     /**
     ```compile_fail
     # use crate::stringlet::stringlet;
+        println!("FAILED should not see this");
+        stringlet!(trim 2: ""); // 0 is too short
+    ```
+    */
+    fn test_macro_trim_2_compile_fail() {}
+
+    /**
+    ```compile_fail
+    # use crate::stringlet::stringlet;
+        println!("FAILED should not see this");
+        stringlet!(trim: ["ok", ""]); // 0 is too short
+    ```
+    */
+    fn test_macro_trim_array_compile_fail() {}
+
+    /**
+    ```compile_fail
+    # use crate::stringlet::stringlet;
+        println!("FAILED should not see this");
+        stringlet!(trim 2: ["ok", ""]); // 0 is too short
+    ```
+    */
+    fn test_macro_trim_array_2_compile_fail() {}
+
+    /**
+    ```compile_fail
+    # use crate::stringlet::stringlet;
+        println!("FAILED should not see this");
         stringlet!(slim: "0123456789_123456789_123456789_123456789_123456789_123456789_1234"); // 65 is too long
     ```
     */

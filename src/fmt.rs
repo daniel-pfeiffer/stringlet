@@ -2,12 +2,12 @@
 
 use crate::*;
 
-use core::fmt::{Debug, Display, Error, Formatter};
+use core::fmt::{Debug, Display, Formatter, Result};
 
 impl_for! {
     Display:
 
-    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), Error> {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result {
         write!(fmt, "{}", self.as_str())
     }
 }
@@ -15,7 +15,7 @@ impl_for! {
 impl_for! {
     Debug:
 
-    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), Error> {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result {
         if fmt.alternate() {
             write!(
                 fmt,
@@ -41,10 +41,13 @@ impl_for! {
                 write!(fmt, "str: {:?}", self.as_str())?;
             }
         } else {
+            write!(fmt, "{}", Kind::NAME)?;
+            if SIZE != 16 {
+                write!(fmt, "<{SIZE}>")?;
+            }
             write!(
                 fmt,
-                "{} {{ str: {:?}",
-                Self::type_name(),
+                " {{ str: {:?}",
                 self.as_str()
             )?;
         }

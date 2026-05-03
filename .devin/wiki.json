@@ -1,0 +1,302 @@
+{
+  "repo_notes": [
+    {
+      "content": ""
+    }
+  ],
+  "pages": [
+    {
+      "title": "Overview",
+      "purpose": "Introduce the stringlet crate, explaining what it is, why it exists, and when to use it. Cover the core value proposition: fast, cheap, Copy-able inline strings.",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Getting Started",
+      "purpose": "Quick start guide showing basic usage patterns, installation, and simple examples of creating and using stringlets.",
+      "parent": "Overview",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Core Concepts",
+      "purpose": "Explain fundamental concepts: inline storage, Copy semantics, branchless design, no-std compatibility, and how stringlet differs from String/&str.",
+      "parent": "Overview",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "String Type Variants",
+      "purpose": "Overview of the four stringlet variants, their trade-offs, and when to choose each one.",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Stringlet (Fixed-Size)",
+      "purpose": "Deep dive into Stringlet<SIZE>: fixed-length strings, compiled bounds, fastest variant, use cases and examples.",
+      "parent": "String Type Variants",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "VarStringlet (Variable-Length)",
+      "purpose": "Explain VarStringlet<SIZE>: variable-length with explicit length byte, 0..=255 constraint, performance characteristics.",
+      "parent": "String Type Variants",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "TrimStringlet (Optional Trim)",
+      "purpose": "Cover TrimStringlet<SIZE>: UTF-8 niche for optional 1-byte trim, branchless length calculation, ideal for minimal variation.",
+      "parent": "String Type Variants",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "SlimStringlet (6-bit Length)",
+      "purpose": "Detail SlimStringlet<SIZE>: 6-bit length encoding in UTF-8 niche, 0..=64 constraint, space-efficient for short strings.",
+      "parent": "String Type Variants",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Construction and Initialization",
+      "purpose": "Comprehensive guide to creating stringlet instances through various methods: macros, constructors, and conversions.",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "The stringlet! Macro",
+      "purpose": "Complete reference for the stringlet! macro: syntax variations, size inference, type selection, array construction.",
+      "parent": "Construction and Initialization",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Direct Constructors",
+      "purpose": "Document new(), from_str(), from_utf8(), from_utf8_bytes() and their *_unchecked variants, including safety requirements.",
+      "parent": "Construction and Initialization",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Compile-Time Construction",
+      "purpose": "Explain const construction, compile-time validation, const assertions, and creating const stringlet arrays.",
+      "parent": "Construction and Initialization",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Runtime Construction and Conversions",
+      "purpose": "Cover From/Into traits, FromStr parsing, runtime validation, error handling, and conversion from String/&str.",
+      "parent": "Construction and Initialization",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Core Operations",
+      "purpose": "Reference for fundamental stringlet operations: querying properties, accessing content, and type introspection.",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Length and Emptiness",
+      "purpose": "Detailed explanation of len() and is_empty() methods, including how each variant implements length calculation.",
+      "parent": "Core Operations",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Content Access",
+      "purpose": "Document as_bytes(), as_str() methods, safety guarantees, and performance characteristics of content access.",
+      "parent": "Core Operations",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Type Introspection",
+      "purpose": "Cover is_fixed(), is_trim(), is_var(), is_slim() methods and type_name() for runtime type identification.",
+      "parent": "Core Operations",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Standard Library Integration",
+      "purpose": "Overview of how stringlets integrate with Rust's standard library through trait implementations.",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "References and Dereferencing",
+      "purpose": "Explain Deref to &str, AsRef implementations, and casting between str/String and stringlet types.",
+      "parent": "Standard Library Integration",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Display and Debug Formatting",
+      "purpose": "Document Display and Debug implementations, including alternate debug mode and STRINGLET_RAW_DEBUG environment variable.",
+      "parent": "Standard Library Integration",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Comparison and Ordering",
+      "purpose": "Detail Eq, PartialEq, Ord, PartialOrd implementations, including optimizations for different size and type combinations.",
+      "parent": "Standard Library Integration",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Collections and Hashing",
+      "purpose": "Explain Hash implementation and usage in HashMap/BTreeMap, including performance characteristics.",
+      "parent": "Standard Library Integration",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Internal Architecture",
+      "purpose": "Deep dive into the implementation: StringletBase, Kind system, and core design patterns.",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "StringletBase and Kind System",
+      "purpose": "Explain the generic StringletBase<Kind, SIZE, LEN> structure, Kind marker types, and PhantomData usage.",
+      "parent": "Internal Architecture",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Length Encoding Strategies",
+      "purpose": "Detailed explanation of how each variant encodes length: implicit SIZE, explicit byte, UTF-8 niche tagging.",
+      "parent": "Internal Architecture",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "UTF-8 Niche Optimization",
+      "purpose": "Deep dive into TAG constant, niche encoding technique, why 0b11xxxxxx is invalid UTF-8, and branchless calculations.",
+      "parent": "Internal Architecture",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Compile-Time Validation System",
+      "purpose": "Explain ConfigBase, VarConfig, SlimConfig traits, and how size constraints are enforced at compile time.",
+      "parent": "Internal Architecture",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Macro System",
+      "purpose": "Document config! and impl_for! macros, code generation patterns, and how they reduce boilerplate.",
+      "parent": "Internal Architecture",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Performance and Design Philosophy",
+      "purpose": "Explain the design principles behind stringlet: branchless operations, Copy semantics, and performance characteristics.",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Branchless Design",
+      "purpose": "Explain the branchless philosophy, how const flags enable compile-time branch elimination, and why this matters for performance.",
+      "parent": "Performance and Design Philosophy",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    }
+  ]
+}
