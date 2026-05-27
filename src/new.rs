@@ -40,10 +40,13 @@ where
 
     /**
     ```
-    # use stringlet::Stringlet;
+    # use stringlet::{Stringlet, Result};
     let abcd = unsafe { Stringlet::<4>::from_utf8(b"Abcd") }?;
     assert_eq!(abcd, "Abcd");
-    # Ok::<(), stringlet::error::Error>(())
+    assert!(Stringlet::<0>::from_utf8(b"A").is_err());
+    assert!(Stringlet::<1>::from_utf8(b"").is_err());
+    assert!(Stringlet::<1>::from_utf8(b"\xFF").is_err());
+    # Result::Ok(())
     ```
     */
     pub const fn from_utf8(str: &[u8]) -> Result<Self> {
@@ -93,10 +96,11 @@ where
 
     /**
     ```
-    # use stringlet::Stringlet;
-    let abcd = Stringlet::<4>::from_utf8_bytes([b'A', b'b', b'c', b'd'])?;
+    # use stringlet::{Stringlet, Result};
+    let abcd = Stringlet::from_utf8_bytes([b'A', b'b', b'c', b'd'])?;
     assert_eq!(abcd, "Abcd");
-    # Ok::<(), stringlet::error::Error>(())
+    assert!(Stringlet::from_utf8_bytes([0xFF]).is_err());
+    # Result::Ok(())
     ```
     */
     pub const fn from_utf8_bytes(str: [u8; SIZE]) -> Result<Self> {
@@ -111,6 +115,7 @@ where
     /**
     ```
     # use stringlet::Stringlet;
+    # unsafe { Stringlet::from_utf8_bytes_unchecked([]) }; // for llvm-cov
     const ABCD: Stringlet<4> =
         unsafe { Stringlet::from_utf8_bytes_unchecked([b'A', b'b', b'c', b'd']) };
     assert_eq!(ABCD, "Abcd");
@@ -124,10 +129,11 @@ where
 
     /**
     ```
-    # use stringlet::Stringlet;
-    let abcd = Stringlet::<4>::from_utf8_slice(b"Abcd")?;
+    # use stringlet::{Stringlet, Result};
+    let abcd = Stringlet::from_utf8_slice(b"Abcd")?;
     assert_eq!(abcd, "Abcd");
-    # Ok::<(), stringlet::error::Error>(())
+    assert!(Stringlet::from_utf8_slice(b"\xFF").is_err());
+    # Result::Ok(())
     ```
     */
     pub const fn from_utf8_slice(str: &[u8; SIZE]) -> Result<Self> {
@@ -142,6 +148,7 @@ where
     /**
     ```
     # use stringlet::Stringlet;
+    # unsafe { Stringlet::from_utf8_slice_unchecked(b"") }; // for llvm-cov
     const ABCD: Stringlet<4> =
         unsafe { Stringlet::from_utf8_slice_unchecked(b"Abcd") };
     assert_eq!(ABCD, "Abcd");
@@ -195,56 +202,56 @@ mod doctests {
     _ = stringlet::Stringlet::<1>::new();
     ```
     */
-    fn test_stringlet_1_new_compile_fail() {}
+    fn stringlet_1_new_compile_fail() {}
 
     /**
     ```compile_fail
     let _x: stringlet::Stringlet<1> = Default::default();
     ```
     */
-    fn test_stringlet_1_default_compile_fail() {}
+    fn stringlet_1_default_compile_fail() {}
 
     /**
     ```compile_fail
     _ = stringlet::TrimStringlet::<2>::new();
     ```
     */
-    fn test_trim_stringlet_2_new_compile_fail() {}
+    fn trim_stringlet_2_new_compile_fail() {}
 
     /**
     ```compile_fail
     let _x: stringlet::TrimStringlet<2> = Default::default();
     ```
     */
-    fn test_trim_stringlet_2_default_compile_fail() {}
+    fn trim_stringlet_2_default_compile_fail() {}
 
     /**
     ```compile_fail
     _ = stringlet::VarStringlet::<256>::new();
     ```
     */
-    fn test_var_stringlet_256_new_compile_fail() {}
+    fn var_stringlet_256_new_compile_fail() {}
 
     /**
     ```compile_fail
     let _x: stringlet::VarStringlet<256> = Default::default();
     ```
     */
-    fn test_var_stringlet_256_default_compile_fail() {}
+    fn var_stringlet_256_default_compile_fail() {}
 
     /**
     ```compile_fail
     _ = stringlet::SlimStringlet::<65>::new();
     ```
     */
-    fn test_slim_stringlet_65_new_compile_fail() {}
+    fn slim_stringlet_65_new_compile_fail() {}
 
     /**
     ```compile_fail
     let _x: stringlet::SlimStringlet<65> = Default::default();
     ```
     */
-    fn test_slim_stringlet_65_default_compile_fail() {}
+    fn slim_stringlet_65_default_compile_fail() {}
 }
 
 #[cfg(test)]
@@ -252,7 +259,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_fits() {
+    fn fits() {
         assert!(Stringlet::<0>::fits(0).is_ok());
         assert!(Stringlet::<0>::fits(1).is_err());
         assert!(Stringlet::<1>::fits(1).is_ok());
@@ -285,7 +292,7 @@ mod tests {
     }
 
     #[test]
-    fn test_new() {
+    fn new() {
         let s = Stringlet::<0>::new();
         assert!(s.is_empty());
         let s = TrimStringlet::<0>::new();
@@ -299,7 +306,7 @@ mod tests {
     }
 
     #[test]
-    fn test_default() {
+    fn default() {
         let s: Stringlet<0> = Default::default();
         assert!(s.is_empty());
         let s: TrimStringlet<0> = Default::default();

@@ -53,13 +53,13 @@ optimized. I hope it can be independently confirmed (or debunked, if I mismeasur
 > is for shorter strings. It works because, because shorter stringlets are padded in such a way that they can only match
 > the same padding.*
 
-> *Sadly this shortcut isn’t possible for comparison of non-fixed stringlets: a size 2* `"a"`*, even if NUL padded, would
-> be indistinguishable from valid string* `"a\0"`*, without also checking the length. And that can’t be done branchlessly.
+> *Sadly this shortcut isn’t possible for comparison of non-fixed stringlets: a size 2* `"a"`*, even if NUL padded,
+> would not be less than valid string* `"a\0"`*, without also checking the length. And that can’t be done branchlessly.
 > So in many cases we must compare dynamic slices.*
 
 ```rust
 # extern crate stringlet;
-use stringlet::{Stringlet, VarStringlet, TrimStringlet, SlimStringlet, stringlet};
+use stringlet::prelude::*;
 
 let a: VarStringlet<10> = "shorter".try_into()?; // override default stringlet size of 16 and don’t use all of it
 let b = a;
@@ -73,12 +73,12 @@ let x = stringlet!("Hello Rust!");       // Stringlet<11> (len of parameter)
 let y = stringlet!(v 14: "Hello Rust!"); // abbreviated VarStringlet<14>, more than length
 let z = stringlet!(slim: "Hello Rust!"); // SlimStringlet<11> (len of parameter)
 let Ψ = stringlet!(v: ["abcd", "abc", "ab"]); // VarStringlet<4> (len of 1st parameter) for each
-let ω = stringlet!(["abc", "def", "ghj"]); // Stringlet<3>  (len of 1st parameter)for each
+let ω = stringlet!(["abc", "def", "ghj"]); // Stringlet<3> (len of 1st parameter) for each
 
 const HELLO: Stringlet<11> = stringlet!("Hello Rust!"); // Input length must match type
 const PET: [Stringlet<3>; 4] = stringlet!(["cat", "dog", "ham", "pig"]); // size of 1st element
 const PETS: [VarStringlet<8>; 4] = stringlet!(_: ["cat", "dog", "hamster", "piglet"]); // _: derive type
-# Ok::<(), stringlet::error::Error>(())
+# stringlet::Result::Ok(())
 ```
 
 But
@@ -98,7 +98,7 @@ error[E0599]: `SlimStringlet<99>` has excessive SIZE
 
 `VarStringlet` and `SlimStringlet` are configured so they can only be instantiated with valid sizes. For normal use
 that’s all there is to it. However when forwarding generic arguments to them you too have to bound by
-`VarConfig<SIZE>` or `SlimConfig<SIZE>`. I wish I could just hide it all behind `<const SIZE: usize<0..=64>>`!
+`stringlet::VarConfig<SIZE>` or `stringlet::SlimConfig<SIZE>`. I wish I could just use `<const SIZE: usize<0..=64>>`!
 
 Summarized nicely on [DeepWiki](https://deepwiki.com/daniel-pfeiffer/stringlet).
 
@@ -106,9 +106,9 @@ Summarized nicely on [DeepWiki](https://deepwiki.com/daniel-pfeiffer/stringlet).
 
 On a 64 bit host `Box<str>` has an in-place 8 byte overhead, `&str` costs 16 extra bytes and `String` even 24
 bytes. *(IMHO the latter should store its capacity on the heap, reducing the move cost by 33%. Make it a fat pointer
-transmutable to `&str`, with capacity at `pointer - 8`.)* Compared to this, only `VarStringlet` has any overhead, and
-only 1 byte. For accessing those standard string types, you always have an indirection (pointer dereference behind the
-scenes,) whereas stringlets are immediately there.
+transmutable to `&str`, with capacity preplaced at `pointer - 8`.)* Compared to this, only `VarStringlet` has any
+overhead, and only 1 byte. For accessing those standard string types, you always have an indirection (pointer
+dereference behind the scenes,) whereas stringlets are immediately there.
 
 The downside is that, while the standard strings copy or move only the above mentioned overhead, stringlets must copy or
 move the whole content. What is an advantage for smaller stringlets, becomes more expensive the bigger they get. If you
@@ -153,7 +153,7 @@ is taken from the first parameter. For that it must be const, even if it is not 
 
 - [x] `stringlet::error::Error` & `stringlet::Result`
 
-- [ ] Run `cargo llvm-cov` to find untested code
+- [x] Run `cargo llvm-cov` & `cargo crap` to eliminate untested code
 
 - [ ] Run `cargo fuzz` to stress it
 

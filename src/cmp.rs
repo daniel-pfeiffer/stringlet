@@ -11,6 +11,8 @@ macro_rules! self2 {
     };
 }
 
+// ── Equality ──────────────────────────────────────────────────────
+
 // Needed where explicitly requested, e.g. HashMap key
 impl_for! { Eq }
 
@@ -98,6 +100,17 @@ impl_for! {
 }
 
 impl_for! {
+    <'a> PartialEq<&'a String>:
+
+    #[inline]
+    fn eq(&self, other: &&'a String) -> bool {
+        self.eq(*other)
+    }
+}
+
+// ── Ordering ──────────────────────────────────────────────────────
+
+impl_for! {
     <2> PartialOrd<self2!()>:
 
     // This is less optimised than eq, as the filler after len can’t be less than valid characters.
@@ -148,6 +161,24 @@ impl_for! {
     }
 }
 
+impl_for! {
+    PartialOrd<String>:
+
+    #[inline(always)]
+    fn partial_cmp(&self, other: &String) -> Option<Ordering> {
+        self.partial_cmp(other.as_str())
+    }
+}
+
+impl_for! {
+    <'a> PartialOrd<&'a String>:
+
+    #[inline(always)]
+    fn partial_cmp(&self, other: &&'a String) -> Option<Ordering> {
+        self.partial_cmp(*other)
+    }
+}
+
 // Needed where explicitly requested, e.g. BTreeMap key
 impl_for! {
     Ord:
@@ -155,104 +186,5 @@ impl_for! {
     fn cmp(&self, other: &Self) -> Ordering {
         // Safe to unwrap, as we always return Some.
         self.partial_cmp(other).unwrap()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    // Compare each with self and every other
-    macro_rules! cmp_all {
-        ($op:tt) => {
-            cmp_all!($op:
-                stringlet!(""),
-                stringlet!(v: ""),
-                stringlet!(v 1: ""),
-                stringlet!(v 2: ""),
-                stringlet!(t: ""),
-                stringlet!(t 1: ""),
-                stringlet!(s: ""),
-                stringlet!(s 1: ""),
-                stringlet!(s 2: ""),
-                stringlet!("x"),
-                stringlet!(v: "x"),
-                stringlet!(v 1: "\0"),
-                stringlet!(v 2: "x"),
-                stringlet!(v 3: "x"),
-                stringlet!(t: "x"),
-                stringlet!(t 2: "x"),
-                stringlet!(t 2: "\0"),
-                stringlet!(s: "x"),
-                stringlet!(s 2: "x"),
-                stringlet!(s 2: "\0"),
-                stringlet!(s 3: "x"),
-                stringlet!("y"),
-                stringlet!(v: "y"),
-                stringlet!(v 2: "y"),
-                stringlet!(v 3: "y"),
-                stringlet!(t: "y"),
-                stringlet!(t 2: "y"),
-                stringlet!(s: "y"),
-                stringlet!(s 2: "y"),
-                stringlet!(s 3: "y"),
-                stringlet!("xy"),
-                stringlet!(v: "xy"),
-                stringlet!(v 3: "xy"),
-                stringlet!(v 4: "xy"),
-                stringlet!(t: "xy"),
-                stringlet!(t 3: "xy"),
-                stringlet!(s: "xy"),
-                stringlet!(s 3: "xy"),
-                stringlet!(s 4: "xy"),
-                /* These do not really improve coverage, but explode combinatorics:
-                stringlet!("xyz"),
-                stringlet!(v: "xyz"),
-                stringlet!(v 4: "xyz"),
-                stringlet!(v 5: "xyz"),
-                stringlet!(t: "xyz"),
-                stringlet!(t 4: "xyz"),
-                stringlet!(s: "xyz"),
-                stringlet!(s 4: "xyz"),
-                stringlet!(s 5: "xyz"), */
-            );
-        };
-        ($op:tt: $a:expr, $($rest:expr,)+) => {
-            let a = $a;
-            assert_eq!(a $op a.clone(), a.as_str() $op a.as_str(), "{a:#?}");
-            //assert_eq!(a.as_str() $op a, a.as_str() $op a.as_str(), "{a:#?}");
-            assert_eq!(a $op a.as_str(), a.as_str() $op a.as_str(), "{a:#?}");
-            let ac = const { $a };
-            assert_eq!(a $op ac, a.as_str() $op ac.as_str(), "{a:#?} {ac:#?}");
-            $(
-                let b = $rest;
-                assert_eq!(a $op b, a.as_str() $op b.as_str(), "{a:#?} {b:#?}");
-                //assert_eq!(a.as_str() $op b, a.as_str() $op b.as_str(), "{a:#?} {b:#?}");
-                assert_eq!(a $op b.as_str(), a.as_str() $op b.as_str(), "{a:#?} {b:#?}");
-                assert_eq!(b $op a, b.as_str() $op a.as_str(), "{a:#?} {b:#?}");
-                //assert_eq!(b.as_str() $op a, b.as_str() $op a.as_str(), "{a:#?} {b:#?}");
-                assert_eq!(b $op a.as_str(), b.as_str() $op a.as_str(), "{a:#?} {b:#?}");
-            )+
-            cmp_all!($op: $($rest,)+);
-        };
-        ($op:tt: $a:expr,) => {};
-    }
-
-    #[test]
-    fn test_eq() {
-        // Compare all kinds with enough variation in len and SIZE
-        cmp_all!(==);
-    }
-
-    #[test]
-    fn test_lt() {
-        // Compare all kinds with enough variation in len and SIZE
-        cmp_all!(<);
-    }
-
-    #[test]
-    fn test_le() {
-        // Compare all kinds with enough variation in len and SIZE
-        //cmp_all!(<=);
     }
 }

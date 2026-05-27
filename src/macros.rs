@@ -148,7 +148,7 @@ mod doctests {
         let _: Stringlet<2> = stringlet!(_: ""); // 0 is too short
     ```
     */
-    fn test_macro_fixed_2_compile_fail() {}
+    fn macro_fixed_2_compile_fail() {}
 
     /**
     ```compile_fail
@@ -157,7 +157,7 @@ mod doctests {
         let _: [Stringlet<2>; 2] = stringlet!(_: ["ok", ""]); // 0 is too short
     ```
     */
-    fn test_macro_fixed_array_compile_fail() {}
+    fn macro_fixed_array_compile_fail() {}
 
     /**
     ```compile_fail
@@ -166,7 +166,7 @@ mod doctests {
         stringlet!(2: ""); // 0 is too short
     ```
     */
-    fn test_macro_fixed_2_0_compile_fail() {}
+    fn macro_fixed_2_0_compile_fail() {}
 
     /**
     ```compile_fail
@@ -175,7 +175,7 @@ mod doctests {
         stringlet!(2: "more"); // 4 is too long
     ```
     */
-    fn test_macro_fixed_2_4_compile_fail() {}
+    fn macro_fixed_2_4_compile_fail() {}
 
     /**
     ```compile_fail
@@ -184,7 +184,7 @@ mod doctests {
         stringlet!(var: "0123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_12345");
     ```
     */
-    fn test_macro_var_256_compile_fail() {} // VarStringlet<256> is too long
+    fn macro_var_256_compile_fail() {} // VarStringlet<256> is too long
 
     /**
     ```compile_fail
@@ -193,7 +193,7 @@ mod doctests {
         stringlet!(trim 2: ""); // 0 is too short
     ```
     */
-    fn test_macro_trim_2_compile_fail() {}
+    fn macro_trim_2_compile_fail() {}
 
     /**
     ```compile_fail
@@ -202,7 +202,7 @@ mod doctests {
         stringlet!(trim: ["ok", ""]); // 0 is too short
     ```
     */
-    fn test_macro_trim_array_compile_fail() {}
+    fn macro_trim_array_compile_fail() {}
 
     /**
     ```compile_fail
@@ -211,7 +211,7 @@ mod doctests {
         stringlet!(trim 2: ["ok", ""]); // 0 is too short
     ```
     */
-    fn test_macro_trim_array_2_compile_fail() {}
+    fn macro_trim_array_2_compile_fail() {}
 
     /**
     ```compile_fail
@@ -220,7 +220,7 @@ mod doctests {
         stringlet!(slim: "0123456789_123456789_123456789_123456789_123456789_123456789_1234"); // 65 is too long
     ```
     */
-    fn test_macro_slim_65_compile_fail() {} // SlimStringlet<65> is too long
+    fn macro_slim_65_compile_fail() {} // SlimStringlet<65> is too long
 }
 
 #[cfg(test)]
@@ -229,7 +229,7 @@ mod tests {
         assert_eq!(format!("{:?}", slet), str);
     }
     #[test]
-    fn test_all_types() {
+    fn all_types() {
         cmp(stringlet!("aha"), "Stringlet<3> { str: \"aha\" }");
         cmp(stringlet!(var: "aha"), "VarStringlet<3> { str: \"aha\" }");
         cmp(stringlet!(trim: "aha"), "TrimStringlet<3> { str: \"aha\" }");

@@ -14,3 +14,15 @@ impl From<Utf8Error> for Error {
         Self::Utf8Error(e)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn utf8_error() {
+        #[allow(invalid_from_utf8)]
+        let utf8_error: Error = str::from_utf8(&[0xff]).unwrap_err().into();
+        assert!(matches!(utf8_error, Error::Utf8Error(_)));
+    }
+}
