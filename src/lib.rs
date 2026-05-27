@@ -1,5 +1,6 @@
 #![doc = include_str!("../README.md")]
 #![deny(clippy::alloc_instead_of_core, clippy::std_instead_of_core)]
+#![allow(clippy::wildcard_imports)] // only our own
 
 /* #![no_std]
 extern crate alloc; */
@@ -12,12 +13,13 @@ mod fmt;
 mod macros;
 mod methods;
 mod new;
+pub mod prelude;
 mod refs;
 mod traits;
 mod workaround;
 
 pub(crate) use error::Error::*;
-pub(crate) type Result<T> = core::result::Result<T, error::Error>;
+pub type Result<T> = core::result::Result<T, error::Error>;
 
 /**
 Magic sauce for a UTF-8 hack: a byte containing two high bits is not a valid last byte.
@@ -163,15 +165,17 @@ This is the underlying type, which you would not use directly. Instead use one o
 
 If you want to create either of `VarStringlet` or `SlimStringlet` generically, you must specify their bounds:
 ```
-# use stringlet::{VarStringlet, VarConfig, SlimStringlet, SlimConfig};
-fn create<const SIZE: usize>()
+use stringlet::{VarStringlet, VarConfig, SlimStringlet, SlimConfig, Result};
+fn create<const SIZE: usize>() -> Result<()>
 where
     VarStringlet<SIZE>: VarConfig<SIZE>,
     SlimStringlet<SIZE>: SlimConfig<SIZE>,
 {
-    let var = VarStringlet::<SIZE>::try_from("var").unwrap();
-    let slim: SlimStringlet<SIZE> = "slim".try_into().unwrap();
+    let _var = VarStringlet::<SIZE>::try_from("var")?;
+    let _slim: SlimStringlet<SIZE> = "slim".try_into()?;
+    Ok(())
 }
+_ = create::<5>();
 ```
 */
 // Workaround for [u8; SIZE + Kind::EXTRA_LEN], as long as “generic parameters may not be used in const operations”
