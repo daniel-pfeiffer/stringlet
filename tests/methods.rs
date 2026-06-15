@@ -88,3 +88,10 @@ fn empty() {
     assert!(!stringlet!(slim: "a").is_empty());
     assert!(!stringlet!(slim: "ab").is_empty());
 }
+
+#[test]
+fn try_into() {
+    let _: SlimStringlet<1> = stringlet!("").try_into().unwrap();
+    let x: Result<SlimStringlet<0>, _> = stringlet!("x").try_into();
+    assert!(x.is_err());
+}

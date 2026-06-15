@@ -4,7 +4,7 @@ use crate::*;
 
 use core::slice::from_raw_parts;
 
-impl<Kind: StringletKind, const SIZE: usize> StringletBase<Kind, SIZE> {
+impl<Kind: crate::Kind, const SIZE: usize> StringletBase<Kind, SIZE> {
     #[inline]
     /// Workaround to get the extra len byte for `VarStringlet`.
     pub(crate) const fn var_last(&self) -> u8 {

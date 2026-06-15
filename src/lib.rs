@@ -32,13 +32,14 @@ the length of the unused tail, makes the branchless implementation of `len()` mo
 */
 pub(crate) const TAG: u8 = 0b11_000000;
 
-pub trait StringletKind {
+pub trait Kind {
     type ExtraLen: Copy + Clone;
     const FIXED: bool = false;
     const VAR: bool = false;
     const TRIM: bool = false;
     const SLIM: bool = false;
     const NAME: &str;
+    const ABBR: u8;
 }
 
 /// Configure constructors of `StringletBase` to have only valid generic parameters.
@@ -49,9 +50,9 @@ pub trait StringletKind {
     note = "`SlimStringlet` cannot be longer than 64 bytes. Consider using `VarStringlet`!"
 )]
 #[doc(hidden)]
-pub trait ConfigBase<Kind, const SIZE: usize = 16> {}
+pub trait Config<Kind, const SIZE: usize = 16> {}
 
-impl<const SIZE: usize> ConfigBase<Fixed, SIZE> for Stringlet<SIZE> {}
+impl<const SIZE: usize> Config<Fixed, SIZE> for Stringlet<SIZE> {}
 
 #[diagnostic::on_unimplemented(
     message = "`VarStringlet<{SIZE}>` has excessive SIZE",
@@ -60,9 +61,9 @@ impl<const SIZE: usize> ConfigBase<Fixed, SIZE> for Stringlet<SIZE> {}
 )]
 pub trait VarConfig<const SIZE: usize> {}
 // VarConfig implemented by macro below
-impl<const SIZE: usize> ConfigBase<Var, SIZE> for VarStringlet<SIZE> where Self: VarConfig<SIZE> {}
+impl<const SIZE: usize> Config<Var, SIZE> for VarStringlet<SIZE> where Self: VarConfig<SIZE> {}
 
-impl<const SIZE: usize> ConfigBase<Trim, SIZE> for TrimStringlet<SIZE> {}
+impl<const SIZE: usize> Config<Trim, SIZE> for TrimStringlet<SIZE> {}
 
 #[diagnostic::on_unimplemented(
     message = "`SlimStringlet<{SIZE}>` has excessive SIZE",
@@ -71,7 +72,7 @@ impl<const SIZE: usize> ConfigBase<Trim, SIZE> for TrimStringlet<SIZE> {}
 )]
 pub trait SlimConfig<const SIZE: usize> {}
 // SlimConfig implemented by macro below
-impl<const SIZE: usize> ConfigBase<Slim, SIZE> for SlimStringlet<SIZE> where Self: SlimConfig<SIZE> {}
+impl<const SIZE: usize> Config<Slim, SIZE> for SlimStringlet<SIZE> where Self: SlimConfig<SIZE> {}
 
 macro_rules! config {
     (@@ $stringlet:ident $kind_config:ident $($size:tt)+) => {
@@ -107,10 +108,11 @@ macro_rules! config {
         #[derive(Copy, Clone)]
         pub enum $kind {}
 
-        impl StringletKind for $kind {
+        impl Kind for $kind {
             const $const: bool = true;
             type ExtraLen = $extra_len;
             const NAME: &str = stringify!($stringlet);
+            const ABBR: u8 = stringify!($kind).as_bytes()[0]; // todo NAME[0]
         }
 
         #[doc = concat!($msg1, " length kind of stringlet", $msg2)]
@@ -182,7 +184,7 @@ _ = create::<5>();
 // Adapted from CAD97 https://internals.rust-lang.org/t/what-s-where-size-kind-extra/23987/9
 #[repr(C)]
 #[derive(Copy, Clone)]
-pub struct StringletBase<Kind: StringletKind, const SIZE: usize> {
+pub struct StringletBase<Kind: crate::Kind, const SIZE: usize> {
     /// The actual payload – if it is shorter than SIZE, its last bytes will be tagged.
     pub(crate) str: [u8; SIZE],
     pub(crate) extra_len: Kind::ExtraLen,
@@ -193,36 +195,46 @@ pub struct StringletBase<Kind: StringletKind, const SIZE: usize> {
 ```ignore
 impl_for! { SomeTrait }
 impl_for! { SomeTrait: impl_body }
-impl_for! { <'a, 2> SomeTrait<self2!()>: impl_body }
+impl_for! { <'a, Config, 2> SomeTrait<self2!()>: impl_body }
 ```
-where `'a`, `2` and impl_body are all optional, `2` meaning 2<sup>nd</sup> generic stringlet.
+where `'a`, `Config`, `2` and impl_body are all optional, `2` meaning 2<sup>nd</sup> generic stringlet.
 */
 macro_rules! impl_for {
     // Split this rule, otherwise compiler says optional <…> is ambiguous
     // $two should match nothing, but marks that 2 was matched.
-    (<$($lt:lifetime)? $(,)? $(2 $($two:literal)?)?> $trait:ty $(: $($rest:tt)+)?) => {
-        impl_for!(@ $(2 $($two)?)? $($lt)? [] $trait: $($($rest)+)?);
+    (<$($lt:lifetime $(,)?)? $($config:ident $(,)?)? $(2 $($two:literal)?)?> $trait:ty $(: $($rest:tt)+)?) => {
+        impl_for!(@ $(2 $($two)?)? ($($lt)?) {$($config)?} [] $trait: $($($rest)+)?);
     };
     ($trait:ty $(: $($rest:tt)+)?) => {
-        impl_for!(@ [] $trait: $($($rest)+)?);
+        impl_for!(@ () {} [] $trait: $($($rest)+)?);
     };
 
-    (@ $($lt:lifetime)? [$($gen:tt)*] $trait:ty: $($rest:tt)*) => {
-        impl<$($lt,)? Kind: StringletKind, const SIZE: usize, $($gen)*> $trait
+    (@ ($($lt:lifetime)?) {$($config:ident)?} [$($gen:tt)*] $trait:ty: $($rest:tt)*) => {
+        impl<$($lt,)? Kind: crate::Kind, const SIZE: usize, $($gen)*> $trait
         for StringletBase<Kind, SIZE>
-        where Self: ConfigBase<Kind, SIZE>
+        $(where Self: $config<Kind, SIZE>)?
+        //where Self: Config<Kind, SIZE>
         {
             $($rest)*
         }
     };
-    (@ 2 $($lt:lifetime)? [] $trait:ty: $($rest:tt)*) => {
+    (@ 2 $lt:tt $config:tt [] $trait:ty: $($rest:tt)*) => {
         impl_for!(@
-            $($lt)?
-            [Kind2: StringletKind, const SIZE2: usize]
+            $lt
+            $config
+            [Kind2: crate::Kind, const SIZE2: usize]
             $trait:
             $($rest)*
         );
     };
 }
 
+/// A 2<sup>nd</sup> generic `StringletBase`.
+macro_rules! self2 {
+    () => {
+        StringletBase<Kind2, SIZE2>
+    };
+}
+
 pub(crate) use impl_for;
+pub(crate) use self2;

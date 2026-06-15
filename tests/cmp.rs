@@ -8,67 +8,67 @@ macro_rules! cmp_all {
         #[test]
         fn $fn() {
             cmp_all!($op:
-                stringlet!(""),
-                stringlet!(v: ""),
-                stringlet!(v 1: ""),
-                stringlet!(v 2: ""),
-                stringlet!(t: ""),
-                stringlet!(t 1: ""),
-                stringlet!(s: ""),
-                stringlet!(s 1: ""),
-                stringlet!(s 2: ""),
-                stringlet!("x"),
-                stringlet!(v: "x"),
-                stringlet!(v 1: "\0"),
-                stringlet!(v 2: "x"),
-                stringlet!(v 3: "x"),
-                stringlet!(t: "x"),
-                stringlet!(t 2: "x"),
-                stringlet!(t 2: "\0"),
-                stringlet!(s: "x"),
-                stringlet!(s 2: "x"),
-                stringlet!(s 2: "\0"),
-                stringlet!(s 3: "x"),
-                stringlet!("y"),
-                stringlet!(v: "y"),
-                stringlet!(v 2: "y"),
-                stringlet!(v 3: "y"),
-                stringlet!(t: "y"),
-                stringlet!(t 2: "y"),
-                stringlet!(s: "y"),
-                stringlet!(s 2: "y"),
-                stringlet!(s 3: "y"),
-                stringlet!("xy"),
-                stringlet!(v: "xy"),
-                stringlet!(v 3: "xy"),
-                //stringlet!(v 4: "xy"),
-                stringlet!(t: "xy"),
-                stringlet!(t 3: "xy"),
-                stringlet!(s: "xy"),
-                stringlet!(s 3: "xy"),
+                (""),
+                (v: ""),
+                (v 1: ""),
+                (v 2: ""),
+                (t: ""),
+                (t 1: ""),
+                (s: ""),
+                (s 1: ""),
+                (s 2: ""),
+                ("x"),
+                (v: "x"),
+                (v 1: "\0"),
+                (v 2: "x"),
+                (v 3: "x"),
+                (t: "x"),
+                (t 2: "x"),
+                (t 2: "\0"),
+                (s: "x"),
+                (s 2: "x"),
+                (s 2: "\0"),
+                (s 3: "x"),
+                ("y"),
+                (v: "y"),
+                (v 2: "y"),
+                (v 3: "y"),
+                (t: "y"),
+                (t 2: "y"),
+                (s: "y"),
+                (s 2: "y"),
+                (s 3: "y"),
+                ("xy"),
+                (v: "xy"),
+                (v 3: "xy"),
+                //(v 4: "xy"),
+                (t: "xy"),
+                (t 3: "xy"),
+                (s: "xy"),
+                (s 3: "xy"),
                 /* These do not really improve coverage, but explode combinatorics:
-                stringlet!(s 4: "xy"),
-                stringlet!("xyz"),
-                stringlet!(v: "xyz"),
-                stringlet!(v 4: "xyz"),
-                stringlet!(v 5: "xyz"),
-                stringlet!(t: "xyz"),
-                stringlet!(t 4: "xyz"),
-                stringlet!(s: "xyz"),
-                stringlet!(s 4: "xyz"),
-                stringlet!(s 5: "xyz"), */
+                (s 4: "xy"),
+                ("xyz"),
+                (v: "xyz"),
+                (v 4: "xyz"),
+                (v 5: "xyz"),
+                (t: "xyz"),
+                (t 4: "xyz"),
+                (s: "xyz"),
+                (s 4: "xyz"),
+                (s 5: "xyz"), */
             );
         }
     };
-    ($op:tt: $a:expr, $($rest:expr,)+) => {
-        let a = $a;
+    ($op:tt: $a:tt, $($rest:tt,)+) => {
+        let a = stringlet!$a;
         assert_eq!(a $op a.clone(), a.as_str() $op a.as_str(), "{a:#?}");
         //assert_eq!(a.as_str() $op a, a.as_str() $op a.as_str(), "{a:#?}");
         assert_eq!(a $op a.as_str(), a.as_str() $op a.as_str(), "{a:#?}");
-        let ac = const { $a };
+        let ac = const { stringlet!$a };
         assert_eq!(a $op ac, a.as_str() $op ac.as_str(), "{a:#?} {ac:#?}");
         $(
-            let b = $rest;
+            let b = stringlet!$rest;
             assert_eq!(a $op b, a.as_str() $op b.as_str(), "{a:#?} {b:#?}");
             //assert_eq!(a.as_str() $op b, a.as_str() $op b.as_str(), "{a:#?} {b:#?}");
             assert_eq!(a $op b.as_str(), a.as_str() $op b.as_str(), "{a:#?} {b:#?}");
@@ -78,7 +78,7 @@ macro_rules! cmp_all {
         )+
         cmp_all!($op: $($rest,)+);
     };
-    ($op:tt: $a:expr,) => {};
+    ($op:tt: $a:tt,) => {};
 }
 
 cmp_all!(eq: ==);

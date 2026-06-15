@@ -1,3 +1,8 @@
-# It finds this one twice in the branchless expr. The 1st time with >= true, the multiplicand would be 0.
-# The 2nd time, if it is >=, then it is always >, so swapping the OP doesn’t matter.
-exclude_re = ["replace > with >= in StringletBase<Kind, SIZE>::len"]
+exclude_re = [
+    # It finds this one twice in the branchless expr. The 1st time with >= true, the multiplicand would be 0.
+    # The 2nd time, if it is >=, then it is always >, so swapping the OP doesn’t matter.
+    "replace > with >= in StringletBase<Kind, SIZE>::len",
+
+    # Taking this branch is an optimisation, fall through to next gives same result
+    "replace \\|\\| with && in StringletBase<Kind, SIZE>::from_stringlet",
+]

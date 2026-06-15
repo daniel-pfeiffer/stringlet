@@ -92,7 +92,7 @@ error[E0599]: `SlimStringlet<99>` has excessive SIZE
    …
    = note: the following trait bounds were not satisfied:
            `stringlet::StringletBase<stringlet::Slim, 99>: stringlet::SlimConfig<99>`
-           which is required by `stringlet::StringletBase<stringlet::Slim, 99>: ConfigBase<stringlet::Slim, 99>`
+           which is required by `stringlet::StringletBase<stringlet::Slim, 99>: Config<stringlet::Slim, 99>`
    = note: `SlimStringlet` cannot be longer than 64 bytes. Consider using `VarStringlet`!
 ```
 
@@ -100,7 +100,7 @@ error[E0599]: `SlimStringlet<99>` has excessive SIZE
 that’s all there is to it. However when forwarding generic arguments to them you too have to bound by
 `stringlet::VarConfig<SIZE>` or `stringlet::SlimConfig<SIZE>`. I wish I could just use `<const SIZE: usize<0..=64>>`!
 
-Summarized nicely on [DeepWiki](https://deepwiki.com/daniel-pfeiffer/stringlet).
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/daniel-pfeiffer/stringlet) for a nice summary.
 
 ## Tradeoffs
 
@@ -140,9 +140,9 @@ will check the other property only once it runs.
 *Dreaming:* Even if the compiler were to mark this literal with a size hint like `&str<11>`, that would still not be
 good enough. Because most stringlet kinds also accept shorter strings, we would need a way to denote this flexibility in
 the type system. The constructor signature in e.g. `TrimStringlet<SIZE>`, which can be one byte shorter, would need to
-be `from_str(str: &str<SIZE-1..=SIZE>)`. One possibility for this would require two separate entry points to the
-function. Glue code that checks this contract at run time, when called with a dynamic string. Whereas for constant
-string expressions the compiler would perform that check and skip over the glue code.
+be `from_str(str: &str<SIZE.saturating_sub(1)..=SIZE>)`. One possibility for this would require two separate entry
+points to the function. Glue code that checks this contract at run time, when called with a dynamic string. Whereas for
+constant string expressions the compiler would perform that check and skip over the glue code.
 
 Macros have more possibilities. While they can’t generally know which parameter is const, a literal certainly is. So,
 every literal str passed to [`stringlet!(…)`](https://docs.rs/stringlet/latest/stringlet/macro.stringlet.html) is
@@ -153,7 +153,7 @@ is taken from the first parameter. For that it must be const, even if it is not 
 
 - [x] `stringlet::error::Error` & `stringlet::Result`
 
-- [x] Run `cargo llvm-cov` & `cargo crap` to eliminate untested code
+- [x] Run `cargo llvm-cov` & `cargo crap` to ensure all code is tested
 
 - [ ] Run `cargo fuzz` to stress it
 

@@ -19,8 +19,9 @@ impl_for! {
         if fmt.alternate() {
             write!(
                 fmt,
-                "{} {{ ",
+                "{} {{ '{}' ",
                 core::any::type_name::<Self>(),
+                Kind::ABBR as char
             )?;
             let len = self.len();
             if len < SIZE {
@@ -52,5 +53,32 @@ impl_for! {
             )?;
         }
         write!(fmt, " }}")
+    }
+}
+
+impl Display for error::Error {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result {
+        match self {
+            TooLong => write!(fmt, "too long"),
+            TooShort => write!(fmt, "too short"),
+            Utf8Error(e) => write!(fmt, "{e}"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::*;
+
+    #[test]
+    fn error_display() {
+        assert_eq!(
+            Stringlet::<1>::from_str("").unwrap_err().to_string(),
+            "too short"
+        );
+        assert_eq!(
+            Stringlet::<0>::from_str("a").unwrap_err().to_string(),
+            "too long"
+        );
     }
 }

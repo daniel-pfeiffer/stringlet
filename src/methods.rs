@@ -1,8 +1,8 @@
-//! Many implementations to make stringlet easy to use.
+//! Many methods to make stringlet easy to use.
 
 use crate::*;
 
-impl<Kind: StringletKind, const SIZE: usize> StringletBase<Kind, SIZE> {
+impl<Kind: crate::Kind, const SIZE: usize> StringletBase<Kind, SIZE> {
     #[inline(always)]
     pub const fn as_bytes(&self) -> &[u8] {
         if Kind::FIXED {
@@ -19,6 +19,13 @@ impl<Kind: StringletKind, const SIZE: usize> StringletBase<Kind, SIZE> {
     pub const fn as_str(&self) -> &str {
         // SAFETY: str up to len() is guaranteed to to be initialized with valid UTF-8
         unsafe { str::from_utf8_unchecked(self.as_bytes()) }
+    }
+
+    pub const fn try_into<Kind2: crate::Kind, const SIZE2: usize>(self) -> Result<self2!()>
+    where
+        self2!(): Config<Kind2, SIZE2>,
+    {
+        <self2!()>::from_stringlet(self)
     }
 
     /* Once we add appending

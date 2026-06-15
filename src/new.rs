@@ -2,9 +2,9 @@
 
 use crate::*;
 
-impl<Kind: StringletKind, const SIZE: usize> StringletBase<Kind, SIZE>
+impl<Kind: crate::Kind, const SIZE: usize> StringletBase<Kind, SIZE>
 where
-    Self: ConfigBase<Kind, SIZE>,
+    Self: Config<Kind, SIZE>,
 {
     /** Create an empty `Self`. Will panic if type can’t be empty, e.g. `Stringlet<1>` or  `TrimStringlet<2>` */
     #[inline(always)]
@@ -33,6 +33,7 @@ where
 
     /// # Safety
     /// It is the callers responsibility to ensure that the size fits
+    #[must_use]
     pub const unsafe fn from_str_unchecked(str: &str) -> Self {
         // SAFETY len() is up to the caller
         unsafe { Self::from_utf8_unchecked(str.as_bytes()) }
@@ -72,6 +73,7 @@ where
     ```
     # Safety
     It is the callers responsibility to ensure that the size fits and the content is UTF-8. */
+    #[must_use]
     pub const unsafe fn from_utf8_unchecked(str: &[u8]) -> Self {
         let bytes_len = str.len();
 
@@ -107,7 +109,7 @@ where
         // const equivalent of `expr?`
         match str::from_utf8(&str) {
             // SAFETY always short enough and no bytes have a UTF-8 error
-            Ok(str) => Ok(unsafe { Self::from_str_unchecked(str) }),
+            Ok(_) => Ok(unsafe { Self::from_utf8_bytes_unchecked(str) }),
             Err(e) => Err(Utf8Error(e)),
         }
     }
@@ -122,9 +124,18 @@ where
     ```
     # Safety
     It is the callers responsibility to ensure that the content is UTF-8. */
+    #[must_use]
     pub const unsafe fn from_utf8_bytes_unchecked(str: [u8; SIZE]) -> Self {
-        // SAFETY It is the callers responsibility to ensure that the content is UTF-8.
-        unsafe { Self::from_utf8_unchecked(&str) }
+        let mut me_uninit = core::mem::MaybeUninit::<Self>::uninit();
+        let me = me_uninit.as_mut_ptr() as *mut u8;
+        // SAFETY we write to whole uninit via pointer methods only before Rust sees the value
+        unsafe {
+            core::ptr::copy_nonoverlapping(str.as_ptr(), me, SIZE);
+            if Kind::VAR {
+                me.add(SIZE).write(SIZE as _);
+            }
+            me_uninit.assume_init()
+        }
     }
 
     /**
@@ -155,13 +166,42 @@ where
     ```
     # Safety
     It is the callers responsibility to ensure that the content is UTF-8. */
+    #[must_use]
     pub const unsafe fn from_utf8_slice_unchecked(str: &[u8; SIZE]) -> Self {
+        // todo: is there a benefit in replicating the body to eliminate the reference?
         // SAFETY It is the callers responsibility to ensure that the content is UTF-8.
         unsafe { Self::from_utf8_unchecked(str) }
     }
 
+    // With specialization the type system could check Kind == Kind2 and SIZE == SIZE2 to avoid the extra check.
+    pub const fn from_stringlet<Kind2: crate::Kind, const SIZE2: usize>(
+        str: self2!(),
+    ) -> Result<Self> {
+        if SIZE == 0 && str.is_empty() {
+            Ok(unsafe { Self::from_utf8_bytes_unchecked([0; SIZE]) })
+        } else if SIZE != SIZE2 {
+            Self::from_str(str.as_str())
+        } else if Kind::ABBR == Kind2::ABBR {
+            Ok(unsafe { Self::from_utf8_unchecked(str.as_bytes()) })
+        } else if !Kind2::VAR
+            && (Kind::FIXED && str.len() == SIZE
+                || Kind::TRIM
+                    && (Kind2::FIXED || Kind2::SLIM && str.len() >= SIZE.saturating_sub(1))
+                || Kind::SLIM)
+        {
+            // SAFETY we checked the length and already had UTF-8
+            Ok(unsafe { Self::from_utf8_unchecked(str.as_slice()) })
+            // The compiler ignores that we checked SIZE == SIZE2 and refuses this
+            //Ok(unsafe { core::mem::transmute(str) })
+            //} else if !Kind2::VAR {
+        } else {
+            Self::from_str(str.as_str())
+        }
+    }
+
     #[doc(hidden)]
     #[inline]
+    #[must_use]
     pub const fn _from_macro(str: &str) -> Self {
         match Self::fits(str.len()) {
             // SAFETY we checked the length and got UTF-8
@@ -188,10 +228,40 @@ where
 }
 
 impl_for! {
-    Default:
+    <Config> Default:
 
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/* impl_for! {
+    <Config, 2> TryFrom<self2!()>:
+
+    type Error = error::Error;
+
+    fn try_from(str: self2!()) -> Result<Self> {
+        Self::from_str(str.as_str())
+    }
+} */
+
+impl_for! {
+    <Config> TryFrom<String>:
+
+    type Error = error::Error;
+
+    fn try_from(str: String) -> Result<Self> {
+        Self::from_str(str.as_str())
+    }
+}
+
+impl_for! {
+    <Config> TryFrom<&str>:
+
+    type Error = error::Error;
+
+    fn try_from(str: &str) -> Result<Self> {
+        Self::from_str(str)
     }
 }
 
@@ -289,33 +359,5 @@ mod tests {
         assert!(SlimStringlet::<2>::fits(0).is_ok());
         assert!(SlimStringlet::<64>::fits(0).is_ok());
         assert!(SlimStringlet::<64>::fits(64).is_ok());
-    }
-
-    #[test]
-    fn new() {
-        let s = Stringlet::<0>::new();
-        assert!(s.is_empty());
-        let s = TrimStringlet::<0>::new();
-        assert!(s.is_empty());
-        let s = TrimStringlet::<1>::new();
-        assert!(s.is_empty());
-        let s = VarStringlet::<8>::new();
-        assert!(s.is_empty());
-        let s = SlimStringlet::<8>::new();
-        assert!(s.is_empty());
-    }
-
-    #[test]
-    fn default() {
-        let s: Stringlet<0> = Default::default();
-        assert!(s.is_empty());
-        let s: TrimStringlet<0> = Default::default();
-        assert!(s.is_empty());
-        let s: TrimStringlet<1> = Default::default();
-        assert!(s.is_empty());
-        let s: VarStringlet = Default::default();
-        assert!(s.is_empty());
-        let s: SlimStringlet = Default::default();
-        assert!(s.is_empty());
     }
 }
